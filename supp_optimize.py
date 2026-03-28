@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+#take input from user for supplier details and constraints for time and cost, then optimize the supplier selection based on the given constraints and weights for cost, time, risk and moq.
 class SupplierOptimizer:
     def __init__(self, cost_weight=0.4, time_weight=0.4, risk_weight=0.1, moq_weight=0.1):
         self.weights = {
@@ -19,6 +20,8 @@ class SupplierOptimizer:
         """
         Simulates 'Learning' by shifting weights based on the current business environment.
         """
+        # In a real implementation, these weights would be learned from data and updated dynamically.
+        # there should be no mode and weigths are user input 
         if mode == "crisis": # Focus entirely on speed and reliability
             self.weights = {'cost': 0.1, 'time': 0.6, 'risk': 0.2, 'moq': 0.1}
         elif mode == "budget": # Focus on lowest price
@@ -80,7 +83,8 @@ optimizer = SupplierOptimizer()
 # Add various suppliers
 optimizer.add_supplier(1, "Global Logistics Co", cost=500, time=20, risk=0.2, moq=100)
 optimizer.add_supplier(2, "Local Fast-Track", cost=1200, time=30, risk=0.1, moq=50)
-optimizer.add_supplier(3, "Budget Sea-Freight", cost=300, time=45, risk=0.5, moq=500)
+optimizer.add_supplier(3, "Budget Sea-Freight", cost=300, time=
+                       5, risk=0.5, moq=500)
 optimizer.add_supplier(4, "City-Side Supply", cost=900, time=50, risk=0.05, moq=25)
 
 # SITUATION: A critical disruption is detected 
