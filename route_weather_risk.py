@@ -16,7 +16,11 @@ logger = logging.getLogger("WeatherRisk")
 app = Flask(__name__)
 CORS(app)
 
-OWM_API_KEY = '3d9674b7e59462ae04b589f2b2d06147'
+try:
+    import config
+    OWM_API_KEY = config.OWM_API_KEY
+except ImportError:
+    OWM_API_KEY = os.getenv("OWM_API_KEY", "")
 
 CACHE_TTL_SECONDS = 30 * 60
 CACHE_MAX_ENTRIES = 500
