@@ -1,11 +1,12 @@
 """
-Supply Chain Discrete Event Simulation (DES) Engine - V4
+Supply Chain Discrete Event Simulation (DES) Engine - V5
 =========================================================
 Production-ready simulation with:
   - High-fidelity customs facility clearance (Seaport, ACC, ICP, ICD)
   - Importance sampling for rare-event variance reduction
   - API caching (lru_cache) for Google Maps, Searoutes, Aviation Edge, Railway
   - SimulationQueue: concurrent multi-job processing via ProcessPoolExecutor
+  - Combined Risk Integration (Weather + Sentiment) from combination.py
 
 Dependencies: simpy, numpy
 Install: pip install simpy numpy
@@ -181,6 +182,14 @@ class Node:
         self.env = env
         self.name = name
 
+    def _scale_delay(self, delay: float) -> float:
+        """Apply risk-aware delay scaling if injected by MC runner."""
+        return delay * getattr(self, '_risk_delay_multiplier', 1.0)
+
+    def _scale_cost(self, cost: float) -> float:
+        """Apply risk-aware cost scaling if injected by MC runner."""
+        return cost * getattr(self, '_risk_cost_multiplier', 1.0)
+
     def process(self, shipment: Shipment):
         yield self.env.timeout(0)
 
@@ -214,7 +223,8 @@ class CustomsNode(Node):
             delay = self._pre_delay
         else:
             delay = random.expovariate(1.0 / self.avg_wait_hours)
-        cost = self.fixed_cost + (self.hourly_rate * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.fixed_cost + (self.hourly_rate * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Customs Clearance at {self.name}", delay, cost)
 
@@ -246,7 +256,8 @@ class StateBorderNode(Node):
             delay = self._pre_delay
         else:
             delay = random.uniform(self.min_wait_hours, self.max_wait_hours)
-        cost = self.entry_fee
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.entry_fee)
         yield self.env.timeout(delay)
         shipment.record(f"State Border: {self.name}", delay, cost)
 
@@ -281,7 +292,8 @@ class TransshipmentNode(Node):
             delay = self._pre_delay
         else:
             delay = max(0.5, random.normalvariate(self.mean_hours, self.std_hours))
-        cost = self.base_cost + (self.hourly_rate * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.base_cost + (self.hourly_rate * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Transshipment at {self.name}", delay, cost)
 
@@ -407,7 +419,9 @@ class FacilityClearance(Node):
             print(f"    Final Adjusted Delay: {total_delay:.2f}h (IS Weight: {weight:.4f})")
             self._is_weight = weight  # Store for the MC runner to collect
 
-        cost = self.fixed_cost + (self.hourly_rate * total_delay)
+        # Apply risk-aware scaling
+        total_delay = self._scale_delay(total_delay)
+        cost = self._scale_cost(self.fixed_cost + (self.hourly_rate * total_delay))
         print(f"    Incremental Cost: ${cost:.2f} | Total Shipment Time now: {self.env.now + total_delay:.2f}h")
         yield self.env.timeout(total_delay)
 
@@ -771,6 +785,14 @@ class TransportLink:
         self.dest = dest
         self.mode = mode
 
+    def _scale_delay(self, delay: float) -> float:
+        """Apply risk-aware delay scaling if injected by MC runner."""
+        return delay * getattr(self, '_risk_delay_multiplier', 1.0)
+
+    def _scale_cost(self, cost: float) -> float:
+        """Apply risk-aware cost scaling if injected by MC runner."""
+        return cost * getattr(self, '_risk_cost_multiplier', 1.0)
+
     def traverse(self, shipment: Shipment):
         yield self.env.timeout(0)
 
@@ -825,7 +847,8 @@ class RoadLink(TransportLink):
             else:
                 mu, sigma = get_lognormal_params(self.fallback_mean_h, self.fallback_std_h)
                 delay = random.lognormvariate(mu, sigma)
-        cost = self.base_cost + (self.cost_per_hour * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.base_cost + (self.cost_per_hour * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Road Transit: {self.source} -> {self.dest}", delay, cost)
 
@@ -853,7 +876,8 @@ class RailLink(TransportLink):
                 delay = random.uniform(base_h * 0.95, base_h * 1.15)
             else:
                 delay = random.uniform(self.min_hours, self.max_hours)
-        cost = self.base_cost + (self.cost_per_hour * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.base_cost + (self.cost_per_hour * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Rail Transit: {self.source} -> {self.dest}", delay, cost)
 
@@ -878,7 +902,8 @@ class AirLink(TransportLink):
         else:
             base_h = self.air_client.get_transit_time_hours(self.source, self.dest) if self.air_client else self.mean_hours
             delay = max(1.0, random.normalvariate(base_h, self.std_hours))
-        cost = self.base_cost + (self.cost_per_hour * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.base_cost + (self.cost_per_hour * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Air Transit: {self.source} -> {self.dest}", delay, cost)
 
@@ -908,7 +933,8 @@ class ShipLink(TransportLink):
                 delay = random.triangular(base_h * 0.9, base_h * 1.3, base_h)
             else:
                 delay = random.triangular(self.min_hours, self.max_hours, self.mode_hours)
-        cost = self.fuel_cost + (self.cost_per_hour * delay)
+        delay = self._scale_delay(delay)
+        cost = self._scale_cost(self.fuel_cost + (self.cost_per_hour * delay))
         yield self.env.timeout(delay)
         shipment.record(f"Sea Transit: {self.source} -> {self.dest}", delay, cost)
 
@@ -1019,7 +1045,8 @@ def build_route_with_nodes(env, locations, modes, gmaps=None,
 
 
 def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
-                    importance_boost=1.0, facility_configs=None, gmaps=None):
+                    importance_boost=1.0, facility_configs=None, gmaps=None,
+                    combined_risk_score=0.0):
     """
     Runs the DES simulation N times using pure Monte Carlo + importance sampling.
 
@@ -1027,23 +1054,45 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
     Importance sampling (boost > 1.0) over-samples rare triggers with
     likelihood-ratio reweighting for unbiased tail-risk estimation.
 
+    Combined Risk Integration:
+        When combined_risk_score > 0, delays and costs are scaled:
+          delay_multiplier = 1.0 + risk_scale_factor * combined_risk_score
+          cost_multiplier  = 1.0 + (risk_scale_factor * 0.6) * combined_risk_score
+        This models that higher risk routes experience proportionally longer
+        delays and increased costs (demurrage, rerouting, insurance).
+
     Args:
-        locations:        List of location strings.
-        modes:            List of transport modes.
-        n_iterations:     MC iterations (default 100).
-        seed:             Random seed.
-        importance_boost: Rare trigger probability multiplier (1.0 = off).
-        facility_configs: Optional facility injection configs.
-        gmaps:            Optional GoogleMapsClient.
+        locations:           List of location strings.
+        modes:               List of transport modes.
+        n_iterations:        MC iterations (default 100).
+        seed:                Random seed.
+        importance_boost:    Rare trigger probability multiplier (1.0 = off).
+        facility_configs:    Optional facility injection configs.
+        gmaps:               Optional GoogleMapsClient.
+        combined_risk_score: 0.0-1.0 combined risk from combination.py (default 0.0 = no risk adjustment).
     """
     random.seed(seed)
     np.random.seed(seed)
+
+    # ── Risk-Aware Scaling ─────────────────────────────────────
+    # Map combined_risk_score (0.0-1.0) to delay/cost multipliers.
+    # At risk=0.0: multiplier=1.0 (no change)
+    # At risk=0.5: multiplier=1.50 (50% longer delays)
+    # At risk=1.0: multiplier=2.00 (double delays)
+    RISK_DELAY_SCALE = 1.0   # max additional delay factor at risk=1.0
+    RISK_COST_SCALE  = 0.6   # max additional cost factor at risk=1.0
+
+    delay_multiplier = 1.0 + RISK_DELAY_SCALE * combined_risk_score
+    cost_multiplier  = 1.0 + RISK_COST_SCALE * combined_risk_score
 
     times = []
     costs = []
     weights = []
 
-    print(f"\n>>> Starting Monte Carlo Simulation: {n_iterations} iterations, Seed: {seed}, IS Boost: {importance_boost}")
+    risk_tag = f", CombinedRisk: {combined_risk_score:.4f}" if combined_risk_score > 0 else ""
+    print(f"\n>>> Starting Monte Carlo Simulation: {n_iterations} iterations, Seed: {seed}, IS Boost: {importance_boost}{risk_tag}")
+    if combined_risk_score > 0:
+        print(f"    Risk Multipliers — Delay: {delay_multiplier:.2f}x, Cost: {cost_multiplier:.2f}x")
     mc_start_time = time.time()
 
     for i in range(n_iterations):
@@ -1058,6 +1107,12 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
             for element in planner.route:
                 if isinstance(element, FacilityClearance):
                     element._importance_boost = importance_boost
+
+        # Inject risk multipliers into all route elements
+        if combined_risk_score > 0:
+            for element in planner.route:
+                element._risk_delay_multiplier = delay_multiplier
+                element._risk_cost_multiplier = cost_multiplier
 
         shipment = Shipment(env, f"MC-{i+1:03d}")
 
@@ -1283,12 +1338,123 @@ def print_results(r):
 
 
 # =============================================================================
+# RUN SIMULATION WITH RISK — Single entry point for worker.py
+# =============================================================================
+def run_simulation_with_risk(
+    cities: List[str],
+    modes: List[str],
+    cargo_type: str = "general",
+    target_date: Optional[str] = None,
+    n_iterations: int = 50,
+    seed: int = 42,
+    importance_boost: float = 1.0,
+    facility_configs: Optional[list] = None,
+) -> dict:
+    """
+    Complete entry point: fetches combined risk, runs MC simulation, returns
+    a JSON-serializable result dict with both risk analysis and simulation stats.
+
+    This is the function that worker.py calls.
+
+    Args:
+        cities:           List of city names (e.g. ["Mumbai", "Delhi", "Dubai"])
+        modes:            List of transport modes (e.g. ["Road", "Ship"])
+        cargo_type:       Cargo profile key (default "general")
+        target_date:      Optional date string "YYYY-MM-DD"
+        n_iterations:     Monte Carlo iterations
+        seed:             Random seed
+        importance_boost: IS boost factor
+        facility_configs: Optional facility injection configs
+
+    Returns:
+        dict with keys: job_meta, combined_risk, simulation_stats
+    """
+    from combination import compute_combined_risk
+    from datetime import datetime, timezone
+
+    logger.info("=== run_simulation_with_risk ===")
+    logger.info("  Cities: %s", cities)
+    logger.info("  Modes: %s", modes)
+    logger.info("  Cargo: %s, Date: %s", cargo_type, target_date)
+
+    # ── Step 1: Compute Combined Risk ────────────────────────
+    parsed_date = None
+    if target_date:
+        try:
+            parsed_date = datetime.strptime(target_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            logger.warning("Invalid date '%s', ignoring.", target_date)
+
+    try:
+        risk_result = compute_combined_risk(cities, cargo_type, parsed_date)
+        combined_risk_score = risk_result.get("combined_risk_score", 0.0)
+        logger.info("  Combined Risk Score: %.4f (%s)",
+                    combined_risk_score, risk_result.get("risk_level", "UNKNOWN"))
+    except Exception as e:
+        logger.error("  Combined risk evaluation failed: %s. Using 0.0.", e)
+        risk_result = {"combined_risk_score": 0.0, "risk_level": "UNKNOWN", "error": str(e)}
+        combined_risk_score = 0.0
+
+    # ── Step 2: Run Monte Carlo with risk-scaled delays ──────
+    sim_stats = monte_carlo_des(
+        locations=cities,
+        modes=modes,
+        n_iterations=n_iterations,
+        seed=seed,
+        importance_boost=importance_boost,
+        facility_configs=facility_configs,
+        combined_risk_score=combined_risk_score,
+    )
+
+    # ── Step 3: Assemble final result ────────────────────────
+    # Convert numpy types to native Python for JSON serialization
+    def _to_native(obj):
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        elif isinstance(obj, (np.floating,)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, tuple):
+            return list(obj)
+        elif isinstance(obj, dict):
+            return {k: _to_native(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_to_native(x) for x in obj]
+        return obj
+
+    result = _to_native({
+        "job_meta": {
+            "cities": cities,
+            "modes": modes,
+            "cargo_type": cargo_type,
+            "target_date": target_date,
+            "n_iterations": n_iterations,
+            "seed": seed,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        "combined_risk": {
+            "score": combined_risk_score,
+            "level": risk_result.get("risk_level", "UNKNOWN"),
+            "route_viable": risk_result.get("route_viable", True),
+            "recommendation": risk_result.get("recommendation", ""),
+            "weather_risk": risk_result.get("weather_risk", {}),
+            "sentiment_risk": risk_result.get("sentiment_risk", {}),
+        },
+        "simulation_stats": sim_stats,
+    })
+
+    logger.info("=== Simulation complete ===")
+    return result
+
+
+# =============================================================================
 # MAIN — Sequential + Queue Demo
 # =============================================================================
 if __name__ == "__main__":
     print("=" * 90)
-    print("  SUPPLY CHAIN DES ENGINE V4 — Production Queue Architecture")
-    print("  Features: Importance Sampling + API Caching + SimulationQueue")
+    print("  SUPPLY CHAIN DES ENGINE V5 — Risk-Aware Production Architecture")
+    print("  Features: Combined Risk + Importance Sampling + API Caching + SimulationQueue")
     print("=" * 90 + "\n")
 
     # --- Mode 1: Sequential MC ---
@@ -1323,5 +1489,4 @@ if __name__ == "__main__":
                 print_results(r["result"])
             elif r["error"]:
                 print(f"  Error: {r['error']}")
-
 

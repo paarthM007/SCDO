@@ -1,0 +1,17 @@
+# Core simulation
+simpy
+numpy
+
+# Google Maps API (for road transit)
+googlemaps
+
+# Risk microservices
+flask
+flask-cors
+vaderSentiment
+requests
+pycountry
+
+# Worker (Pub/Sub + Firestore)
+google-cloud-pubsub
+google-cloud-firestore
