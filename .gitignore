@@ -1,0 +1,33 @@
+# Root .gitignore for SCDO Project
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+*.log
+
+# Environment / Secrets
+env.sh
+.env
+.env.local
+.env.*.local
+application_default_credentials.json
+
+# Flutter tools (if downloaded into the repo)
+tools/flutter/
+
+# Build artifacts
+build/
+.dart_tool/
