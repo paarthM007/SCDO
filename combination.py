@@ -270,6 +270,14 @@ def compute_combined_risk(
 # FLASK ENDPOINT
 # ==============================================================================
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify({
+        "message": "SCDO Combined Risk API is running.",
+        "endpoints": ["/api/combined-risk", "/api/cargo-types", "/api/health"],
+        "example": "/api/combined-risk?cities=Mumbai,Delhi&cargo_type=general"
+    })
+
 @app.route("/api/combined-risk", methods=["GET"])
 def api_combined_risk():
     """
