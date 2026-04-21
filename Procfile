@@ -1,1 +1,1 @@
-web: gunicorn route_weather_risk:app --bind 0.0.0.0:$PORT --workers 4 --timeout 120
+web: gunicorn gateway:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
