@@ -4,16 +4,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
-# Explicitly set PYTHONPATH so Python can find the 'scdo' package
+# Set PYTHONPATH so the scdo package is discoverable
 ENV PYTHONPATH=/app
-
-# Write Firebase credentials from env var to file at runtime
-RUN printf '#!/bin/bash\n\
-if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then\n\
-  echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /app/firebase-key.json\n\
-  export GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-key.json\n\
-fi\n\
-exec python gateway.py\n' > /app/start.sh && chmod +x /app/start.sh
-
+# Default Port
 EXPOSE 7860
-CMD ["/app/start.sh"]
+
+CMD ["python", "gateway.py"]
