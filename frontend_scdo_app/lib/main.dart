@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
+
 import 'firebase_options.dart';
 
 // ═══════════════════════════════════════════════════════════════
 //  CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
-// Replace with your deployed orchestrator URL
-const String orchestratorUrl = 'http://localhost:8081/orchestrator';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -131,36 +130,36 @@ class _SimulationScreenState extends State<SimulationScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final body = {
+      // ── Direct Firestore Write (No-Card Mode) ────────────────
+      final jobData = {
         'cities': cities,
         'modes': modes,
         'cargo_type': _cargoType,
         'n_iterations': 50,
+        'status': 'pending',
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+        'result': null,
+        'error': null,
       };
+
       if (_dateController.text.trim().isNotEmpty) {
-        body['date'] = _dateController.text.trim();
+        jobData['date'] = _dateController.text.trim();
       }
 
-      final response = await http.post(
-        Uri.parse(orchestratorUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
+      // Add document to Firestore
+      final docRef = await FirebaseFirestore.instance
+          .collection('sim_jobs')
+          .add(jobData);
 
-      if (response.statusCode == 202) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _activeJobId = data['jobId'];
-          _isSubmitting = false;
-        });
-        _showSnackBar('Job submitted: $_activeJobId');
-      } else {
-        final err = jsonDecode(response.body);
-        _showSnackBar('Error: ${err['error'] ?? response.statusCode}');
-        setState(() => _isSubmitting = false);
-      }
+      setState(() {
+        _activeJobId = docRef.id;
+        _isSubmitting = false;
+      });
+      _showSnackBar('Job created in Firestore: ${docRef.id}');
+
     } catch (e) {
-      _showSnackBar('Network error: $e');
+      _showSnackBar('Firestore error: $e');
       setState(() => _isSubmitting = false);
     }
   }
