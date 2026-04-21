@@ -64,3 +64,67 @@ Thumbs.db
 service-account.json
 credentials.json
 firebase-key.json
+
+# --- Added by Antigravity ---
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# Node.js additional
+dist/
+build/
+out/
+.npm
+.eslintcache
+.stylelintcache
+.prettiercache
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+pubsub-debug.log*
+
+# Python additional
+*.pyc
+*.pyo
+*.pyd
+.Python
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+pip-log.txt
+pip-delete-this-directory.txt
+.ipynb_checkpoints/
+
+# Environments
+.env.development
+.env.production
+.env.test
+.env.staging
+
+# Flutter additional
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/ios/Pods/
+**/node_modules/
+.pub-cache/
+.pub/
+
+# OS specific
+Desktop.ini
+[Tt]humbs.db
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
+
