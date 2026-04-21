@@ -4,6 +4,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
+# Explicitly set PYTHONPATH so Python can find the 'scdo' package
+ENV PYTHONPATH=/app
+
 # Write Firebase credentials from env var to file at runtime
 RUN printf '#!/bin/bash\n\
 if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then\n\
