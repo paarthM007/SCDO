@@ -5,6 +5,8 @@ import logging
 from google.cloud import firestore
 from google.oauth2 import service_account
 from scdo.db import get_db
+from scdo.config import FIRESTORE_COLLECTION
+from scdo.simulation.monte_carlo import run_simulation_with_risk
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("worker")
@@ -36,8 +38,11 @@ def start_listener():
                 data = change.document.to_dict()
                 if data.get("status") == "pending":
                     process_job(change.document.id, data)
+    
+    # Use a query to listen for pending jobs
     col_query = db.collection(FIRESTORE_COLLECTION).where("status", "==", "pending")
     col_query.on_snapshot(on_snapshot)
+    
     while True:
         time.sleep(1)
 
