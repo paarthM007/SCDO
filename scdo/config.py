@@ -8,7 +8,6 @@ load_dotenv()
 logger = logging.getLogger("config")
 
 def _get_env(key, default=""):
-    """Get env var and strip whitespace/newlines."""
     val = os.getenv(key, default)
     return val.strip() if isinstance(val, str) else val
 
@@ -23,7 +22,13 @@ GATEWAY_API_KEY = _get_env("GATEWAY_API_KEY", "scdo-dev-key-change-me")
 # ── Project Config ────────────────────────────────────────────
 GOOGLE_CLOUD_PROJECT = _get_env("GOOGLE_CLOUD_PROJECT", "scdodeployment-32cba")
 FIRESTORE_COLLECTION = _get_env("FIRESTORE_COLLECTION", "sim_jobs")
+FIRESTORE_CACHE_COLLECTION = _get_env("FIRESTORE_CACHE_COLLECTION", "api_cache")
 PORT = int(_get_env("PORT", 7860))
+
+# ── Cache TTL Settings (Missing variables) ────────────────────
+WEATHER_CACHE_TTL_SECONDS = 3600  # 1 hour
+SENTIMENT_CACHE_TTL_SECONDS = 7200  # 2 hours
+AIRLABS_CACHE_TTL_DAYS = 7  # 7 days
 
 # ── Raw Credentials ───────────────────────────────────────────
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
