@@ -9,7 +9,7 @@ import io
 from scdo.config import GATEWAY_API_KEY, PORT, FIRESTORE_COLLECTION
 from scdo.db import get_db
 from scdo.routing.router import (
-    find_route, find_alternate_route, list_cities, get_graph
+    find_route, find_alternate_route, list_cities, get_graph, extract_simulation_params
 )
 from scdo.simulation.monte_carlo import run_simulation_with_risk, monte_carlo_des
 
@@ -73,34 +73,28 @@ def api_simulate():
     modes = data.get("modes")
     if not cities or not modes: return _err("Provide 'cities' and 'modes'")
     
-    from scdo.config import MAX_MC_ITERATIONS, DEFAULT_MC_ITERATIONS
-    n_iter = min(data.get("n_iterations", DEFAULT_MC_ITERATIONS), MAX_MC_ITERATIONS)
+    from scdo.config import DEFAULT_MC_ITERATIONS
+    n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
 
     try:
-        result = run_simulation_with_risk(
-            cities=cities, modes=modes,
-            cargo_type=data.get("cargo_type", "general"),
-            n_iterations=n_iter
-        )
-        
-        # Log to Firestore for history/analytics
-        try:
-            db = get_db()
-            db.collection(FIRESTORE_COLLECTION).add({
-                "user_id": uid,
-                "cities": cities,
-                "modes": modes,
-                "result": result,
-                "status": "completed",
-                "created_at": datetime.now(timezone.utc),
-                "source": "api_gateway"
-            })
-        except Exception as db_err:
-            logger.warning(f"Firestore logging failed: {db_err}")
-
-        return jsonify({"status": "ok", "result": result})
+        db = get_db()
+        job_ref = db.collection(FIRESTORE_COLLECTION).add({
+            "user_id": uid,
+            "cities": cities,
+            "modes": modes,
+            "cargo_type": data.get("cargo_type", "general"),
+            "n_iterations": n_iter,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "source": "api_simulate"
+        })
+        return jsonify({
+            "status": "ok", 
+            "message": "Simulation job enqueued", 
+            "job_id": job_ref[1].id
+        })
     except Exception as e:
-        logger.error(f"Simulation failed: {e}")
+        logger.error(f"Failed to enqueue simulation: {e}")
         return _err(str(e), 500)
 
 @app.route("/api/alternate-route", methods=["POST"])
@@ -115,6 +109,35 @@ def api_alternate_route():
         blocked_nodes=data.get("blocked", []),
         cargo_type=data.get("cargo_type", "general")
     )
+    
+    from scdo.config import DEFAULT_MC_ITERATIONS
+    n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
+
+    # Enqueue simulations for each alternate path
+    db = get_db()
+    for key in ["fastest", "cheapest", "balanced"]:
+        path_data = result.get(key)
+        if not path_data or "error" in path_data:
+            continue
+            
+        cities, modes = extract_simulation_params(path_data)
+        if cities and modes:
+            try:
+                job_ref = db.collection(FIRESTORE_COLLECTION).add({
+                    "user_id": uid,
+                    "cities": cities,
+                    "modes": modes,
+                    "cargo_type": data.get("cargo_type", "general"),
+                    "n_iterations": n_iter,
+                    "status": "pending",
+                    "created_at": datetime.now(timezone.utc),
+                    "source": f"alternate_route_{key}"
+                })
+                # Add the job_id to the result so the frontend can track it
+                path_data["simulation_job_id"] = job_ref[1].id
+            except Exception as e:
+                logger.warning(f"Failed to enqueue {key} simulation: {e}")
+
     return jsonify({"status": "ok", "result": result})
 
 @app.route("/api/history", methods=["GET"])

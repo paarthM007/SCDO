@@ -169,6 +169,35 @@ def find_alternate_route(origin, destination, blocked_nodes,
     }
 
 
+def extract_simulation_params(route_result):
+    """
+    Extracts 'cities' and 'modes' lists from a find_route/find_alternate_route result
+    to be used as input for the simulation engine.
+    """
+    if "path_edges" not in route_result:
+        return None, None
+    
+    edges = route_result["path_edges"]
+    if not edges:
+        return None, None
+    
+    # Mode mapping: router modes -> simulation modes
+    MODE_MAP = {
+        "HIGHWAY": "road",
+        "SEA": "ship",
+        "AIR": "air"
+    }
+    
+    cities = [edges[0]["from"]]
+    modes = []
+    
+    for edge in edges:
+        cities.append(edge["to"])
+        modes.append(MODE_MAP.get(edge["mode"], "road"))
+    
+    return cities, modes
+
+
 def list_cities(query=None, country=None):
     """List all cities, optionally filtered."""
     graph = get_graph()
