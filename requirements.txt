@@ -11,3 +11,4 @@ google-genai>=1.0
 googlemaps>=4.10
 pycountry>=23.12
 requests>=2.31
+firebase-admin>=6.4.0

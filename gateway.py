@@ -19,8 +19,36 @@ logger = logging.getLogger("gateway")
 app = Flask(__name__)
 CORS(app)
 
-def _check_auth():
-    return request.headers.get("X-API-Key", "") == GATEWAY_API_KEY
+from firebase_admin import auth
+from collections import defaultdict
+import time
+
+user_requests = defaultdict(list)
+RATE_LIMIT_WINDOW = 60 # seconds
+RATE_LIMIT_MAX = 5 # requests per window
+
+def _get_user():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        # Fallback to dev api key for easy local testing if needed, though JWT is preferred
+        if request.headers.get("X-API-Key", "") == GATEWAY_API_KEY:
+            return "dev_admin_user"
+        return None
+    token = auth_header.split("Bearer ")[1]
+    try:
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token.get("uid")
+    except Exception as e:
+        logger.warning(f"Auth failed: {e}")
+        return None
+
+def _check_rate_limit(uid):
+    now = time.time()
+    user_requests[uid] = [t for t in user_requests[uid] if now - t < RATE_LIMIT_WINDOW]
+    if len(user_requests[uid]) >= RATE_LIMIT_MAX:
+        return False
+    user_requests[uid].append(now)
+    return True
 
 def _err(msg, code=400):
     return jsonify({"error": msg, "status": "error"}), code
@@ -36,7 +64,10 @@ def health():
 
 @app.route("/api/simulate", methods=["POST"])
 def api_simulate():
-    if not _check_auth(): return _err("Unauthorized", 401)
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
+
     data = request.json or {}
     cities = data.get("cities")
     modes = data.get("modes")
@@ -56,6 +87,7 @@ def api_simulate():
         try:
             db = get_db()
             db.collection(FIRESTORE_COLLECTION).add({
+                "user_id": uid,
                 "cities": cities,
                 "modes": modes,
                 "result": result,
@@ -73,7 +105,9 @@ def api_simulate():
 
 @app.route("/api/alternate-route", methods=["POST"])
 def api_alternate_route():
-    if not _check_auth(): return _err("Unauthorized", 401)
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
     data = request.json or {}
     result = find_alternate_route(
         origin=data.get("start"),
@@ -85,16 +119,19 @@ def api_alternate_route():
 
 @app.route("/api/history", methods=["GET"])
 def api_history():
-    if not _check_auth(): return _err("Unauthorized", 401)
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    
     from scdo.analytics import get_job_history, compute_analytics
     mode = request.args.get("mode", "list")
     if mode == "analytics":
-        return jsonify({"status": "ok", "analytics": compute_analytics()})
-    return jsonify({"status": "ok", "jobs": get_job_history()})
+        return jsonify({"status": "ok", "analytics": compute_analytics(user_id=uid)})
+    return jsonify({"status": "ok", "jobs": get_job_history(user_id=uid)})
 
 @app.route("/api/report", methods=["POST"])
 def api_report():
-    if not _check_auth(): return _err("Unauthorized", 401)
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
     data = request.json or {}
     try:
         from scdo.reports import generate_report_pdf

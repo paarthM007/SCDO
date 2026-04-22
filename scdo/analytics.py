@@ -11,10 +11,15 @@ from scdo.db import get_db
 logger = logging.getLogger(__name__)
 
 
-def get_job_history(limit=50, status_filter=None):
-    """Fetch recent jobs from Firestore with optional status filter."""
+def get_job_history(limit=50, status_filter=None, user_id=None):
+    """Fetch recent jobs from Firestore with optional status and user filter."""
     db = get_db()
-    query = db.collection(FIRESTORE_COLLECTION).order_by(
+    query = db.collection(FIRESTORE_COLLECTION)
+
+    if user_id:
+        query = query.where("user_id", "==", user_id)
+        
+    query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit)
 
@@ -40,12 +45,17 @@ def get_job_history(limit=50, status_filter=None):
     return jobs
 
 
-def compute_analytics(limit=200):
+def compute_analytics(limit=200, user_id=None):
     """Aggregate analytics over recent completed jobs."""
     db = get_db()
-    docs = db.collection(FIRESTORE_COLLECTION).where(
+    query = db.collection(FIRESTORE_COLLECTION).where(
         "status", "==", "completed"
-    ).order_by("created_at", direction=firestore.Query.DESCENDING
+    )
+    if user_id:
+        query = query.where("user_id", "==", user_id)
+        
+    docs = query.order_by(
+        "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit).stream()
 
     route_counter = Counter()

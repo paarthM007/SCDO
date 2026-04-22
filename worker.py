@@ -11,12 +11,28 @@ from scdo.simulation.monte_carlo import run_simulation_with_risk
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("worker")
 
+@firestore.transactional
+def claim_job(transaction, doc_ref):
+    snapshot = doc_ref.get(transaction=transaction)
+    if snapshot.exists and snapshot.get("status") == "pending":
+        transaction.update(doc_ref, {
+            "status": "processing",
+            "started_at": firestore.SERVER_TIMESTAMP
+        })
+        return True
+    return False
+
 def process_job(doc_id, data):
     db = get_db()
     doc_ref = db.collection(FIRESTORE_COLLECTION).document(doc_id)
     try:
+        transaction = db.transaction()
+        claimed = claim_job(transaction, doc_ref)
+        if not claimed:
+            logger.info(f"Job {doc_id} already claimed or not pending. Skipping.")
+            return
+
         logger.info(f"Processing job {doc_id}...")
-        doc_ref.update({"status": "processing", "started_at": firestore.SERVER_TIMESTAMP})
         result = run_simulation_with_risk(
             cities=data.get("cities", []),
             modes=data.get("modes", []),
