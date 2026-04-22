@@ -4,15 +4,16 @@ analytics.py - Historical job analytics + insurance cost estimator.
 import logging
 from datetime import datetime, timezone
 from collections import Counter
-from google.cloud import firestore
+from scdo.db import get_db
 from scdo.config import GOOGLE_CLOUD_PROJECT, FIRESTORE_COLLECTION
+from scdo.db import get_db
 
 logger = logging.getLogger(__name__)
 
 
 def get_job_history(limit=50, status_filter=None):
     """Fetch recent jobs from Firestore with optional status filter."""
-    db = firestore.Client(project=GOOGLE_CLOUD_PROJECT)
+    db = get_db()
     query = db.collection(FIRESTORE_COLLECTION).order_by(
         "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit)
@@ -41,7 +42,7 @@ def get_job_history(limit=50, status_filter=None):
 
 def compute_analytics(limit=200):
     """Aggregate analytics over recent completed jobs."""
-    db = firestore.Client(project=GOOGLE_CLOUD_PROJECT)
+    db = get_db()
     docs = db.collection(FIRESTORE_COLLECTION).where(
         "status", "==", "completed"
     ).order_by("created_at", direction=firestore.Query.DESCENDING

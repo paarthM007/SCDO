@@ -1,7 +1,8 @@
 import requests
 import statistics
 from datetime import datetime, timezone, timedelta
-from google.cloud import firestore
+
+from scdo.db import get_db
 from scdo.config import AIRLABS_API_KEY, GOOGLE_CLOUD_PROJECT, FIRESTORE_CACHE_COLLECTION, AIRLABS_CACHE_TTL_DAYS
 
 class AirLabsClient:
@@ -12,7 +13,7 @@ class AirLabsClient:
 
     def __init__(self, api_key: str = AIRLABS_API_KEY):
         self.api_key = api_key
-        self.db = firestore.Client(project=GOOGLE_CLOUD_PROJECT)
+        self.db = get_db()
 
     def get_route_metrics(self, origin: str, dest: str, force_refresh: bool = False) -> tuple:
         route_id = f"{origin}_{dest}"
