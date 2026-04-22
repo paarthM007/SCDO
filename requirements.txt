@@ -1,0 +1,14 @@
+flask>=3.0
+flask-cors>=4.0
+gunicorn>=22.0
+python-dotenv>=1.0
+simpy>=4.1
+numpy>=1.26
+pandas>=2.1
+matplotlib>=3.8
+google-cloud-firestore>=2.16
+google-genai>=1.0
+googlemaps>=4.10
+pycountry>=23.12
+requests>=2.31
+firebase-admin>=6.4.0

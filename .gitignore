@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.env
+config.py
+
+# Secrets (IMPORTANT)
+*.json
+!firebase.json
+!package.json
+
+# Flutter
+frontend_scdo_app/.dart_tool/
+frontend_scdo_app/build/
+frontend_scdo_app/.flutter-plugins
+frontend_scdo_app/.flutter-plugins-dependencies
+
+# OS
+.DS_Store
+*.log
