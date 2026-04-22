@@ -105,11 +105,11 @@ class SCDOHome extends StatefulWidget {
 class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  // !!! TRY THIS URL - ALL LOWERCASE !!!
   final String baseUrl = "https://paarthm007-scdo-api.hf.space";
   final String apiKey = "scdo-dev-key-change-me";
 
   String rawJsonResponse = "Output will appear here...";
+  List<dynamic> history = [];
   bool isLoading = false;
 
   final TextEditingController _simCities = TextEditingController(text: "Mumbai, Delhi");
@@ -121,7 +121,7 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   Future<void> _callApi(String endpoint, Map<String, dynamic> body) async {
@@ -138,19 +138,45 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
         body: jsonEncode(body),
       );
       
-      // If the response is not JSON, we will show the raw HTML/Text
       String bodyString = response.body;
       try {
         var decoded = jsonDecode(bodyString);
         rawJsonResponse = JsonEncoder.withIndent('  ').convert(decoded);
+        // If we just triggered a simulation or alt route, refresh history shortly after
+        if (endpoint.contains("simulate") || endpoint.contains("alternate")) {
+          Future.delayed(Duration(seconds: 2), () => _fetchHistory());
+        }
       } catch (e) {
-        rawJsonResponse = "CRITICAL: SERVER RETURNED NON-JSON (HTML ERROR)\n\n"
-                          "Status: ${response.statusCode}\n"
-                          "Body Preview:\n${bodyString.length > 500 ? bodyString.substring(0, 500) + '...' : bodyString}";
+        rawJsonResponse = "CRITICAL: SERVER ERROR\n\nStatus: ${response.statusCode}\n$bodyString";
       }
       setState(() {});
     } catch (e) {
-      setState(() { rawJsonResponse = "Network Error: $e\nCheck if $baseUrl is correct."; });
+      setState(() { rawJsonResponse = "Network Error: $e"; });
+    } finally {
+      setState(() { isLoading = false; });
+    }
+  }
+
+  Future<void> _fetchHistory() async {
+    setState(() { isLoading = true; });
+    try {
+      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.get(
+        Uri.parse("$baseUrl/api/history"),
+        headers: {
+          "Authorization": "Bearer $token",
+          "X-API-Key": apiKey,
+        },
+      );
+      if (response.statusCode == 200) {
+        var decoded = jsonDecode(response.body);
+        setState(() {
+          history = decoded["jobs"] ?? [];
+          rawJsonResponse = "History synced: ${history.length} jobs found.";
+        });
+      }
+    } catch (e) {
+      setState(() { rawJsonResponse = "History Error: $e"; });
     } finally {
       setState(() { isLoading = false; });
     }
@@ -160,8 +186,9 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("SCDO v2.0 Debugger"),
+        title: Text("SCDO v2.0 Dashboard"),
         actions: [
+          IconButton(icon: Icon(Icons.refresh), onPressed: _fetchHistory),
           IconButton(
             icon: Icon(Icons.logout),
             onPressed: () => FirebaseAuth.instance.signOut(),
@@ -169,17 +196,18 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
         ],
         bottom: TabBar(
           controller: _tabController,
-          tabs: [Tab(text: "Simulation"), Tab(text: "Alt Route")],
+          tabs: [Tab(text: "Simulation"), Tab(text: "Alt Route"), Tab(text: "History")],
         ),
       ),
       body: Row(
         children: [
           Container(
-            width: 350,
+            width: 380,
             color: Colors.black26,
             child: TabBarView(
               controller: _tabController,
               children: [
+                // TAB 1: Simulation
                 Padding(
                   padding: EdgeInsets.all(16),
                   child: Column(
@@ -192,11 +220,12 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
                           "cities": _simCities.text.split(',').map((e) => e.trim()).toList(),
                           "modes": _simModes.text.split(',').map((e) => e.trim()).toList(),
                         }),
-                        child: Text("SIMULATE"),
+                        child: Text("QUEUE SIMULATION"),
                       ),
                     ],
                   ),
                 ),
+                // TAB 2: Alt Route
                 Padding(
                   padding: EdgeInsets.all(16),
                   child: Column(
@@ -211,10 +240,30 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
                           "end": _altEnd.text.trim(),
                           "blocked": _altBlocked.text.split(',').map((e) => e.trim()).toList()
                         }),
-                        child: Text("FIND ALT ROUTE"),
+                        child: Text("FIND ALT + SIMULATE"),
                       ),
                     ],
                   ),
+                ),
+                // TAB 3: History
+                ListView.builder(
+                  itemCount: history.length,
+                  itemBuilder: (context, i) {
+                    var job = history[i];
+                    return ListTile(
+                      title: Text("${job['cities']?.join(' → ') ?? 'Route'}"),
+                      subtitle: Text("Status: ${job['status']} | ${job['created_at']}"),
+                      trailing: Icon(
+                        job['status'] == 'completed' ? Icons.check_circle : Icons.hourglass_empty,
+                        color: job['status'] == 'completed' ? Colors.green : Colors.orange,
+                      ),
+                      onTap: () {
+                        setState(() {
+                          rawJsonResponse = JsonEncoder.withIndent('  ').convert(job);
+                        });
+                      },
+                    );
+                  },
                 ),
               ],
             ),
@@ -226,7 +275,13 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("CONSOLE LOG", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("CONSOLE / JOB RESULTS", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      if (isLoading) CircularProgressIndicator(color: Colors.green, strokeWidth: 2),
+                    ],
+                  ),
                   Divider(color: Colors.green),
                   Expanded(child: SingleChildScrollView(child: SelectableText(rawJsonResponse, style: TextStyle(fontFamily: 'monospace', color: Colors.greenAccent)))),
                 ],

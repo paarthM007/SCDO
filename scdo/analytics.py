@@ -4,9 +4,9 @@ analytics.py - Historical job analytics + insurance cost estimator.
 import logging
 from datetime import datetime, timezone
 from collections import Counter
+from google.cloud import firestore
 from scdo.db import get_db
 from scdo.config import GOOGLE_CLOUD_PROJECT, FIRESTORE_COLLECTION
-from scdo.db import get_db
 
 logger = logging.getLogger(__name__)
 
