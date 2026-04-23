@@ -17,10 +17,10 @@ AIRLABS_API_KEY = _get_env("AIRLABS_API_KEY")
 OWM_API_KEY = _get_env("OWM_API_KEY")
 NEWS_API_KEY = _get_env("NEWS_API_KEY")
 GEMINI_API_KEY = _get_env("GEMINI_API_KEY")
-GATEWAY_API_KEY = _get_env("GATEWAY_API_KEY", "scdo-dev-key-change-me")
+GATEWAY_API_KEY = _get_env("GATEWAY_API_KEY")
 
 # ── Project Config ────────────────────────────────────────────
-GOOGLE_CLOUD_PROJECT = _get_env("GOOGLE_CLOUD_PROJECT", "scdodeployment-32cba")
+GOOGLE_CLOUD_PROJECT = _get_env("GOOGLE_CLOUD_PROJECT")
 FIRESTORE_COLLECTION = _get_env("FIRESTORE_COLLECTION", "sim_jobs")
 FIRESTORE_CACHE_COLLECTION = _get_env("FIRESTORE_CACHE_COLLECTION", "api_cache")
 PORT = int(_get_env("PORT", 7860))
