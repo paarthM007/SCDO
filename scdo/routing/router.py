@@ -246,14 +246,64 @@ def find_alternate_route(origin, destination, blocked_nodes,
     effective_product = product_type or cargo_type
 
     results = {}
-    for obj in ("FASTEST", "CHEAPEST", "BALANCED"):
-        r = find_route(
-            origin, destination, effective_mode, obj, blocked_nodes,
-            quantity=quantity, product_type=effective_product,
-            risk_score=0.0, omega=omega, max_budget=budget,
-            deadline_h=deadline_h,
-        )
-        results[obj.lower()] = r
+    
+    def _is_duplicate(r1, r2):
+        if not r1 or not r2 or "error" in r1 or "error" in r2: return False
+        return [e["to_id"] for e in r1.get("path_edges", [])] == [e["to_id"] for e in r2.get("path_edges", [])]
+
+    # 1. Fastest
+    r_fast = find_route(
+        origin, destination, effective_mode, "FASTEST", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+    )
+    results["fastest"] = r_fast
+
+    # 2. Cheapest
+    r_cheap = find_route(
+        origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+    )
+    
+    # Diversify Cheapest if duplicate
+    if _is_duplicate(r_fast, r_cheap):
+        edges = r_fast.get("path_edges", [])
+        if len(edges) > 1:
+            # Block the middle intermediate node
+            mid_node_name = edges[len(edges) // 2 - 1]["to"]
+            temp_blocked = list(blocked_nodes or []) + [mid_node_name]
+            alt_cheap = find_route(
+                origin, destination, effective_mode, "CHEAPEST", temp_blocked,
+                quantity=quantity, product_type=effective_product,
+                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+            )
+            if "error" not in alt_cheap:
+                r_cheap = alt_cheap
+    results["cheapest"] = r_cheap
+
+    # 3. Balanced
+    r_bal = find_route(
+        origin, destination, effective_mode, "BALANCED", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+    )
+    
+    # Diversify Balanced if duplicate
+    if _is_duplicate(r_bal, r_fast) or _is_duplicate(r_bal, r_cheap):
+        edges = r_fast.get("path_edges", [])
+        if len(edges) > 1:
+            # Block the first intermediate node
+            first_int_name = edges[0]["to"]
+            temp_blocked = list(blocked_nodes or []) + [first_int_name]
+            alt_bal = find_route(
+                origin, destination, effective_mode, "BALANCED", temp_blocked,
+                quantity=quantity, product_type=effective_product,
+                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+            )
+            if "error" not in alt_bal and not _is_duplicate(alt_bal, r_cheap):
+                r_bal = alt_bal
+    results["balanced"] = r_bal
 
     graph = get_graph()
     src_id = find_node_id(graph, origin)
