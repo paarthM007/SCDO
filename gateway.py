@@ -102,6 +102,7 @@ def api_simulate():
 
 @app.route("/api/alternate-route", methods=["POST"])
 def api_alternate_route():
+    """Return path options only — no simulation is triggered."""
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
     if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
@@ -112,36 +113,61 @@ def api_alternate_route():
         blocked_nodes=data.get("blocked", []),
         cargo_type=data.get("cargo_type", "general")
     )
-    
+    return jsonify({"status": "ok", "result": result})
+
+@app.route("/api/simulate-path", methods=["POST"])
+def api_simulate_path():
+    """Simulate a single chosen path (fastest / cheapest / balanced)."""
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
+
+    data = request.json or {}
+    route_key = data.get("route_key")          # "fastest" | "cheapest" | "balanced"
+    if route_key not in ("fastest", "cheapest", "balanced"):
+        return _err("route_key must be one of: fastest, cheapest, balanced")
+
+    # Re-compute the specific route so we have path_edges
+    result = find_alternate_route(
+        origin=data.get("start"),
+        destination=data.get("end"),
+        blocked_nodes=data.get("blocked", []),
+        cargo_type=data.get("cargo_type", "general")
+    )
+    path_data = result.get(route_key)
+    if not path_data or "error" in path_data:
+        return _err(f"No valid '{route_key}' route found")
+
+    cities, modes = extract_simulation_params(path_data)
+    if not cities or not modes:
+        return _err("Could not extract simulation params from route")
+
     from scdo.config import DEFAULT_MC_ITERATIONS
     n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
 
-    # Enqueue simulations for each alternate path
-    db = get_db()
-    for key in ["fastest", "cheapest", "balanced"]:
-        path_data = result.get(key)
-        if not path_data or "error" in path_data:
-            continue
-            
-        cities, modes = extract_simulation_params(path_data)
-        if cities and modes:
-            try:
-                job_ref = db.collection(FIRESTORE_COLLECTION).add({
-                    "user_id": uid,
-                    "cities": cities,
-                    "modes": modes,
-                    "cargo_type": data.get("cargo_type", "general"),
-                    "n_iterations": n_iter,
-                    "status": "pending",
-                    "created_at": datetime.now(timezone.utc),
-                    "source": f"alternate_route_{key}"
-                })
-                # Add the job_id to the result so the frontend can track it
-                path_data["simulation_job_id"] = job_ref[1].id
-            except Exception as e:
-                logger.warning(f"Failed to enqueue {key} simulation: {e}")
-
-    return jsonify({"status": "ok", "result": result})
+    try:
+        db = get_db()
+        job_ref = db.collection(FIRESTORE_COLLECTION).add({
+            "user_id": uid,
+            "cities": cities,
+            "modes": modes,
+            "cargo_type": data.get("cargo_type", "general"),
+            "n_iterations": n_iter,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+            "source": f"alternate_route_{route_key}"
+        })
+        return jsonify({
+            "status": "ok",
+            "message": f"Simulation enqueued for '{route_key}' path",
+            "job_id": job_ref[1].id,
+            "route_key": route_key,
+            "cities": cities,
+            "modes": modes
+        })
+    except Exception as e:
+        logger.error(f"Failed to enqueue simulation: {e}")
+        return _err(str(e), 500)
 
 @app.route("/api/history", methods=["GET"])
 def api_history():

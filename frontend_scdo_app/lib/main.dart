@@ -80,6 +80,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+
+  // ─── NEW OAUTH LOGIC ──────────────────────────────────────────
+
+ Future<void> _signInWithGoogle() async {
+    try {
+      // Use the built-in Firebase Web Provider instead of the buggy package
+      GoogleAuthProvider googleProvider = GoogleAuthProvider();
+      await FirebaseAuth.instance.signInWithPopup(googleProvider);
+    } catch (e) {
+      setState(() => _error = "Google Sign-In Error: $e");
+    }
+  }
+
+  // Future<void> _signInWithGitHub() async {
+  //   try {
+  //     GithubAuthProvider githubProvider = GithubAuthProvider();
+  //     await FirebaseAuth.instance.signInWithProvider(githubProvider);
+  //   } catch (e) {
+  //     setState(() => _error = "GitHub Sign-In Error: $e");
+  //   }
+  // }
+
+  // ──────────────────────────────────────────────────────────────
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -99,7 +124,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 ElevatedButton(onPressed: _signIn, child: Text("Sign In")),
                 ElevatedButton(onPressed: _signUp, child: Text("Sign Up")),
               ],
+<<<<<<< HEAD
             )
+=======
+            ),
+            SizedBox(height: 30),
+            Divider(color: Colors.grey),
+            SizedBox(height: 20),
+            // ─── NEW OAUTH BUTTONS ────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
+                icon: Icon(Icons.g_mobiledata, size: 30),
+                label: Text("Sign in with Google"),
+                onPressed: _signInWithGoogle,
+              ),
+            ),
+            // SizedBox(height: 10),
+            // SizedBox(
+            //   width: double.infinity,
+            //   child: ElevatedButton.icon(
+            //     style: ElevatedButton.styleFrom(backgroundColor: Colors.black38, foregroundColor: Colors.white),
+            //     icon: Icon(Icons.code), // generic icon for Github
+            //     label: Text("Sign in with GitHub"),
+            //     onPressed: _signInWithGitHub,
+            //   ),
+            // ),
+>>>>>>> cf3068d9f12f8e15fdb382e8bb5e8ae8d755597c
           ],
         ),
       ),
@@ -122,6 +174,10 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
   List<dynamic> history = [];
   bool isLoading = false;
 
+  // ── Alternate-route state ──────────────────────────────────
+  Map<String, dynamic>? altRouteResult; // holds the 3-path result
+  Map<String, bool> simulatingPath = {};  // track per-key loading
+
   final TextEditingController _simCities = TextEditingController(text: "Mumbai, Delhi");
   final TextEditingController _simModes = TextEditingController(text: "Road");
   final TextEditingController _altStart = TextEditingController(text: "Mumbai");
@@ -134,17 +190,21 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
     _tabController = TabController(length: 3, vsync: this);
   }
 
+  Future<Map<String, String>> _authHeaders() async {
+    String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      "Authorization": "Bearer $token",
+      "X-API-Key": apiKey,
+      "Content-Type": "application/json",
+    };
+  }
+
   Future<void> _callApi(String endpoint, Map<String, dynamic> body) async {
     setState(() { isLoading = true; rawJsonResponse = "Calling $baseUrl$endpoint..."; });
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse("$baseUrl$endpoint"),
-        headers: {
-          "Authorization": "Bearer $token",
-          "X-API-Key": apiKey,
-          "Content-Type": "application/json"
-        },
+        headers: await _authHeaders(),
         body: jsonEncode(body),
       );
       
@@ -152,8 +212,8 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
       try {
         var decoded = jsonDecode(bodyString);
         rawJsonResponse = JsonEncoder.withIndent('  ').convert(decoded);
-        // If we just triggered a simulation or alt route, refresh history shortly after
-        if (endpoint.contains("simulate") || endpoint.contains("alternate")) {
+        // If we just triggered a simulation, refresh history shortly after
+        if (endpoint.contains("simulate")) {
           Future.delayed(Duration(seconds: 2), () => _fetchHistory());
         }
       } catch (e) {
@@ -167,16 +227,68 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
     }
   }
 
+  // ── Find alternate routes (discovery only, no simulation) ──
+  Future<void> _findAlternateRoutes() async {
+    setState(() {
+      isLoading = true;
+      altRouteResult = null;
+      simulatingPath = {};
+      rawJsonResponse = "Finding alternate routes...";
+    });
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/alternate-route"),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "start": _altStart.text.trim(),
+          "end": _altEnd.text.trim(),
+          "blocked": _altBlocked.text.split(',').map((e) => e.trim()).toList(),
+        }),
+      );
+      var decoded = jsonDecode(response.body);
+      rawJsonResponse = JsonEncoder.withIndent('  ').convert(decoded);
+      if (decoded["status"] == "ok") {
+        altRouteResult = decoded["result"];
+      }
+    } catch (e) {
+      rawJsonResponse = "Network Error: $e";
+    } finally {
+      setState(() { isLoading = false; });
+    }
+  }
+
+  // ── Simulate a single chosen path ──────────────────────────
+  Future<void> _simulatePath(String routeKey) async {
+    setState(() { simulatingPath[routeKey] = true; });
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/simulate-path"),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "start": _altStart.text.trim(),
+          "end": _altEnd.text.trim(),
+          "blocked": _altBlocked.text.split(',').map((e) => e.trim()).toList(),
+          "route_key": routeKey,
+        }),
+      );
+      var decoded = jsonDecode(response.body);
+      rawJsonResponse = JsonEncoder.withIndent('  ').convert(decoded);
+      if (decoded["status"] == "ok") {
+        Future.delayed(Duration(seconds: 2), () => _fetchHistory());
+      }
+    } catch (e) {
+      rawJsonResponse = "Simulation Error: $e";
+    } finally {
+      setState(() { simulatingPath[routeKey] = false; });
+    }
+  }
+
   Future<void> _fetchHistory() async {
     setState(() { isLoading = true; });
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.get(
         Uri.parse("$baseUrl/api/history"),
-        headers: {
-          "Authorization": "Bearer $token",
-          "X-API-Key": apiKey,
-        },
+        headers: await _authHeaders(),
       );
       if (response.statusCode == 200) {
         var decoded = jsonDecode(response.body);
@@ -190,6 +302,104 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
     } finally {
       setState(() { isLoading = false; });
     }
+  }
+
+  // ── Build a route summary card ─────────────────────────────
+  Widget _routeCard(String key, Map<String, dynamic>? pathData) {
+    if (pathData == null || pathData.containsKey("error")) {
+      return Card(
+        color: Colors.grey[900],
+        margin: EdgeInsets.symmetric(vertical: 6),
+        child: ListTile(
+          title: Text(key.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(pathData?["error"] ?? "No route", style: TextStyle(color: Colors.redAccent)),
+        ),
+      );
+    }
+
+    final dist = pathData["total_distance_km"] ?? "-";
+    final time = pathData["total_time_readable"] ?? "-";
+    final cost = pathData["total_cost_usd"] ?? "-";
+    final hops = pathData["num_hops"] ?? "-";
+    final modes = (pathData["modes_used"] as List?)?.join(", ") ?? "-";
+    final isSim = simulatingPath[key] == true;
+
+    Color accentColor;
+    IconData icon;
+    switch (key) {
+      case "fastest":
+        accentColor = Colors.orangeAccent;
+        icon = Icons.speed;
+        break;
+      case "cheapest":
+        accentColor = Colors.greenAccent;
+        icon = Icons.savings;
+        break;
+      default:
+        accentColor = Colors.cyanAccent;
+        icon = Icons.balance;
+    }
+
+    return Card(
+      color: Colors.grey[900],
+      margin: EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: accentColor.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, color: accentColor, size: 20),
+              SizedBox(width: 8),
+              Text(key.toUpperCase(),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: accentColor, fontSize: 14)),
+            ]),
+            SizedBox(height: 8),
+            Text("📏 $dist km  ·  ⏱ $time  ·  💲\$$cost",
+                style: TextStyle(fontSize: 12, color: Colors.white70)),
+            Text("🔗 $hops hops  ·  $modes",
+                style: TextStyle(fontSize: 12, color: Colors.white54)),
+            SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: BorderSide(color: Colors.white24),
+                  ),
+                  icon: Icon(Icons.visibility, size: 16),
+                  label: Text("View JSON"),
+                  onPressed: () {
+                    setState(() {
+                      rawJsonResponse = JsonEncoder.withIndent('  ').convert(pathData);
+                    });
+                  },
+                ),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor.withOpacity(0.2),
+                    foregroundColor: accentColor,
+                  ),
+                  icon: isSim
+                      ? SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: accentColor))
+                      : Icon(Icons.play_arrow, size: 18),
+                  label: Text(isSim ? "Simulating..." : "Simulate"),
+                  onPressed: isSim ? null : () => _simulatePath(key),
+                ),
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -235,7 +445,7 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
                     ],
                   ),
                 ),
-                // TAB 2: Alt Route
+                // TAB 2: Alt Route — Discovery + per-path simulate
                 Padding(
                   padding: EdgeInsets.all(16),
                   child: Column(
@@ -243,15 +453,29 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
                       TextField(controller: _altStart, decoration: InputDecoration(labelText: "Start")),
                       TextField(controller: _altEnd, decoration: InputDecoration(labelText: "End")),
                       TextField(controller: _altBlocked, decoration: InputDecoration(labelText: "Blocked")),
-                      SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: () => _callApi("/api/alternate-route", {
-                          "start": _altStart.text.trim(),
-                          "end": _altEnd.text.trim(),
-                          "blocked": _altBlocked.text.split(',').map((e) => e.trim()).toList()
-                        }),
-                        child: Text("FIND ALT + SIMULATE"),
+                      SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: Icon(Icons.route),
+                          label: Text("FIND ROUTES"),
+                          onPressed: isLoading ? null : _findAlternateRoutes,
+                        ),
                       ),
+                      SizedBox(height: 12),
+                      // Show route cards when available
+                      if (altRouteResult != null)
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _routeCard("fastest", altRouteResult!["fastest"]),
+                                _routeCard("cheapest", altRouteResult!["cheapest"]),
+                                _routeCard("balanced", altRouteResult!["balanced"]),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

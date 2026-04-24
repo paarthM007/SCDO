@@ -28,11 +28,12 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyB05_lmT9_WXhy55hZe8u4OeHq1PymQqtc',
-    appId: '1:415414693981:web:ca3e258ea700133a881db4', // Updated with actual Web App ID
+    appId: '1:415414693981:web:ca3e258ea700133a881db4',
     messagingSenderId: '415414693981',
     projectId: 'scdodeployment-32cba',
     authDomain: 'scdodeployment-32cba.firebaseapp.com',
     storageBucket: 'scdodeployment-32cba.firebasestorage.app',
+    measurementId: 'G-7DZZZSZW98',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -42,4 +43,6 @@ class DefaultFirebaseOptions {
     projectId: 'scdodeployment-32cba',
     storageBucket: 'scdodeployment-32cba.firebasestorage.app',
   );
-}
+
+  // Replace with your Firebase Android config
+}
