@@ -1,168 +1,121 @@
----
-title: SCDO API
-emoji: 🚀
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
+# SCDO v3.0 — Supply Chain Disruption Oracle 🚀
+
+> **A predictive, multi-modal supply chain optimization engine designed to detect disruptions before they happen and auto-reconfigure logistics paths using stochastic modeling.**
+
 ---
 
-# SCDO v3.0 — Supply Chain Disruption Oracle
+## 🏛️ Part I: Product & Architecture Analysis
 
-> **A scalable system for continuously analyzing multifaceted transit data to preemptively detect and flag potential supply chain disruptions, formulate dynamic re-routing mechanisms, and recommend optimized route adjustments before localized bottlenecks cascade into broader delays.**
+### 1. Vision & Value Proposition
+SCDO (Supply Chain Disruption Oracle) is not just a routing tool; it is a **continuous intelligence system** for logistics. In an era of volatile climate patterns, geopolitical shifts, and rapid news cycles, traditional static routing is obsolete. SCDO solves this by:
+- **Preemptive Detection**: Identifying bottlenecks *before* they cascade into delays.
+- **Dynamic Re-Routing**: Auto-blocking high-risk nodes (weather/sentiment) and finding alternate paths.
+- **Probabilistic Forecasting**: Using Monte Carlo simulations to give users confidence intervals on arrival times and costs.
 
-## 🏗️ Architecture Overview
+### 2. High-Level Architecture (The Triple-Engine Model)
+SCDO is built on a modular, asynchronous architecture consisting of three core engines:
 
-```
-┌─────────────────┐     REST API      ┌──────────────────────────┐
-│  Flutter Web UI  │ ◄──────────────► │    Flask Gateway (7860)  │
-│  (Port 8080)     │                  │                          │
-└─────────────────┘                   │  ┌────────────────────┐  │
-                                      │  │ Routing Engine      │  │
-                                      │  │ (Dijkstra + CTR)    │  │
-                                      │  └────────────────────┘  │
-                                      │  ┌────────────────────┐  │
-                                      │  │ Risk Scoring Engine │  │
-                                      │  │ (Weather+Sentiment) │  │
-                                      │  └────────────────────┘  │
-                                      │  ┌────────────────────┐  │
-                                      │  │ Monte Carlo DES     │  │
-                                      │  │ (Simulation Engine) │  │
-                                      │  └────────────────────┘  │
-                                      │  ┌────────────────────┐  │
-                                      │  │ Firestore DB        │  │
-                                      │  │ (Jobs + Profiles)   │  │
-                                      │  └────────────────────┘  │
-                                      └──────────────────────────┘
-```
+#### A. Multi-Modal Routing Engine (CTR Tensor)
+The routing engine uses a custom implementation of **Dijkstra's Algorithm** with **CTR (Cost-Time-Risk) Tensor Weighting**. 
+- **1,100+ Nodes**: Covers 766 Indian districts and 400+ global logistics hubs.
+- **Modes**: Highway, Sea, and Air.
+- **Math**: Edge Weight $W(e) = \omega \cdot \hat{C}(e) + (1-\omega) \cdot \hat{T}(e)$, where $\omega$ is the user-defined balance between cost and time.
 
-## 🔬 Key Technical Features
+#### B. Risk Fusion Engine (Non-Linear Integration)
+This engine fuses three distinct data streams into a singular risk score ($R \in [0, 1]$):
+1. **Weather (Physical)**: Real-time data from OpenWeatherMap API.
+2. **Sentiment (Sociopolitical)**: NLP-driven analysis of global news headlines via **Google Gemini LLM**.
+3. **Community (Crowdsourced)**: Real-time reports from other users in the network.
+- **Synergy Formula**: $R_{base} = 1 - (1-S)(1-W) + S \cdot W \cdot k$. This ensures that if both weather and sentiment are bad, the risk amplifies non-linearly.
 
-### 1. Multi-Modal Routing Engine
-- **1,100+ city nodes** (766 Indian districts + 400 global cities/ports/airports)
-- **Dijkstra-based pathfinding** with three modes: `HIGHWAY`, `SEA`, `AIR`
-- **CTR Tensor Weighting** — Cost-Time-Risk dynamic edge weights: `W(e) = ω·Ĉ(e) + (1-ω)·T̂(e)`
-- **Cargo-aware constraint pruning** — mode blacklists per product type, quantity thresholds
-- **Route diversification** — Fastest, Cheapest, and Balanced routes with deduplication
-- **Feasibility Index** — `F_idx = min(1, Budget/C) · min(1, Deadline/T)`
+#### C. Monte Carlo Simulation Engine (DES)
+Instead of providing a single "ETA," SCDO runs **1,000+ probabilistic simulations** for every hop.
+- **Stochastic Delay Modeling**: Models delays as random variables adjusted by the local risk score.
+- **Outputs**: Mean arrival time, standard deviation, and "Worst Case" scenarios.
+- **Asynchronous Processing**: Jobs are enqueued via **Firestore** and processed by a background worker to ensure UI responsiveness.
 
-### 2. Risk Scoring Engine (ML/NLP)
-- **Weather Risk** — Real-time weather API integration, normalized to 0–1 per-city scores
-- **Sentiment Risk (NLP)** — News headline analysis via Gemini LLM for supply-chain sentiment scoring
-- **Community Crowdsourced Risk** — User-submitted per-city ratings with deduplication (latest per user)
-- **Non-linear combination**: `R = 1 - (1-S)(1-W) + S·W·k` with synergy amplification
-- **Kill-switch** at 0.85 — auto-flags extreme-risk routes
+### 3. UX Philosophy: Glassmorphism
+The frontend is built with Flutter, utilizing a **Glassmorphic Dark Theme**. This provides a premium, "mission control" aesthetic with smooth transitions, interactive maps, and real-time polling for simulation status.
 
-### 3. Monte Carlo Discrete Event Simulation
-- **Probabilistic delay modeling** — per-hop stochastic time/cost with risk-adjusted distributions
-- **Configurable iterations** (default 1000) for confidence intervals
-- **Background worker** — async job processing via Firestore queue
+---
 
-### 4. Smart Disruption-Aware Multi-Supplier Routing
-- **Two-pass routing** — finds optimal path first, scans waypoints for disruptions, auto-blocks high-risk cities, re-routes
-- **Risk threshold slider** (Strict → Cautious → Balanced → Aggressive)
-- **Per-city disruption reports** with flagged reasons (weather, news sentiment, community intel)
+## 🛠️ Part II: Developer Guide (Local Setup)
 
-### 5. Community Risk Feedback System
-- **Upsert-based ratings** — users rate cities 1-10, latest rating per user wins
-- **15% weight blending** into the combined risk score
-- **72-hour expiry** for freshness
+Follow these steps to clone the repository and run the full stack on your local machine.
 
-## 🖥️ Frontend (Flutter Web)
+### 1. Prerequisites
+- **Python 3.10+**
+- **Flutter SDK 3.x**
+- **Firebase Account** (Firestore enabled)
+- **API Keys**: Google Gemini, OpenWeatherMap, Google Maps.
 
-| Screen | Description |
-|--------|-------------|
-| **Route Simulator** | Enter origin → destination, pick cargo type, find 3 route options (fastest/cheapest/balanced), simulate with Monte Carlo, see results inline |
-| **Multi-Supplier** | Add multiple supplier origins to one buyer, auto-detect disruptions, compare routes |
-| **Route Comparison** | Side-by-side metric comparison across suppliers with "best route" highlighting |
-| **History** | Past simulation results with polling, PDF report downloads, risk feedback dialogs |
-| **Community** | Browse public supplier/buyer profiles, search by products/location |
-| **Profile** | Manage your supply chain profile, delivery zones, contact info |
-
-## 🚀 Quick Start
-
+### 2. Repository Setup
 ```bash
-# Backend (Flask API Gateway)
+git clone https://github.com/paarthM007/SCDO.git
+cd SCDO
+```
+
+### 3. Backend Configuration (Python)
+1. **Create Virtual Environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. **Environment Variables**:
+   Copy `.env.example` to `.env` and fill in your keys:
+   ```bash
+   cp .env.example .env
+   ```
+   *Required Keys:* `GEMINI_API_KEY`, `OWM_API_KEY`, `GOOGLE_MAPS_API_KEY`.
+
+3. **Firebase Service Account**:
+   - Download your Firebase Admin SDK JSON key from the Firebase Console.
+   - Save it in the root directory as `service-account-file.json`.
+   - Ensure the path matches in `scdo/db.py`.
+
+### 4. Frontend Configuration (Flutter)
+1. **Install Dependencies**:
+   ```bash
+   cd frontend_scdo_app
+   flutter pub get
+   ```
+
+2. **Firebase Setup**:
+   - Initialize Firebase for the web: `flutterfire configure`.
+   - Ensure `lib/firebase_options.dart` is generated.
+
+### 5. Running the Application
+You need to run two processes (Backend and Worker) and then the Frontend.
+
+**Process 1: API Gateway (Flask)**
+```bash
+# In the root SCDO directory
 python gateway.py
+```
 
-# Frontend (Flutter Web)
+**Process 2: Background Worker (Simulation Listener)**
+```bash
+# In a new terminal
+python worker.py
+```
+
+**Process 3: Flutter Web**
+```bash
 cd frontend_scdo_app
-flutter run -d web-server --web-port 8080
+flutter run -d chrome
 ```
 
-**Backend:** http://localhost:7860  
-**Frontend:** http://localhost:8080
+### 6. Project Structure Analysis
+- `/scdo/routing`: The "brain" of the pathfinding logic.
+- `/scdo/risk`: Integration with Gemini LLM and Weather APIs.
+- `/scdo/simulation`: The Monte Carlo stochastic engine.
+- `gateway.py`: The entry point for the REST API.
+- `worker.py`: Listen for Firestore job requests and process them.
+- `/frontend_scdo_app`: The Flutter source code (Screens, Widgets, Theme).
 
-## 📁 Project Structure
+---
 
-```
-SCDO/
-├── gateway.py              # Flask API gateway (all REST endpoints)
-├── worker.py               # Background simulation job processor
-├── scdo/
-│   ├── config.py           # CTR constants, mode blacklists, thresholds
-│   ├── db.py               # Firestore connection
-│   ├── analytics.py        # Job history & analytics
-│   ├── reports.py          # PDF report generation
-│   ├── routing/
-│   │   ├── graph.py        # Multi-modal graph + CTR Dijkstra
-│   │   ├── router.py       # High-level routing API
-│   │   └── cities_data.py  # 1,100+ city node definitions
-│   ├── risk/
-│   │   ├── weather_risk.py # Weather API risk scoring
-│   │   ├── sentiment_risk.py # NLP sentiment via Gemini
-│   │   └── combined_risk.py  # Non-linear risk fusion
-│   └── simulation/
-│       └── monte_carlo.py  # Monte Carlo DES engine
-├── frontend_scdo_app/      # Flutter web application
-│   └── lib/
-│       ├── main.dart       # App entry + auth wrapper
-│       ├── app_config.dart # API URL configuration
-│       ├── screens/        # All UI screens
-│       ├── theme/          # Glass morphism design system
-│       └── widgets/        # Reusable glass containers
-```
-
-## 🔧 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/alternate-route` | Find fastest/cheapest/balanced routes |
-| `POST` | `/api/simulate` | Queue Monte Carlo simulation |
-| `POST` | `/api/simulate-path` | Find route + auto-simulate |
-| `POST` | `/api/multi-supplier-routes` | Multi-supplier disruption-aware routing |
-| `POST` | `/api/feedback` | Submit community risk ratings |
-| `GET`  | `/api/history` | Get simulation history |
-| `POST` | `/api/report` | Generate PDF report |
-| `GET`  | `/api/cities` | Search available cities |
-| `GET`  | `/health` | Health check |
-
-## 📊 Mathematical Models
-
-### CTR Edge Weight (v3.0)
-```
-W(e) = ω · Ĉ(e) + (1 - ω) · T̂(e)
-Ĉ(e) = [F(mode,p) + Q·d·V·(1 + R·α)] / C_norm
-T̂(e) = [(d/s)·(1 + R·β) + P(mode,Q)] / T_norm
-```
-
-### Combined Risk Score
-```
-R_base = 1 - (1-S)(1-W) + S·W·k
-R_final = (1 - w_c)·R_base + w_c·C    (w_c = 0.15)
-Kill-switch: if max(S,W) ≥ 0.85 → R ≥ 0.95
-```
-
-### Feasibility Index
-```
-F_idx = min(1, Budget/C_total) · min(1, Deadline/T_total)
-```
-
-## 🛠️ Tech Stack
-
-- **Backend:** Python 3.10+, Flask, Firebase Admin SDK
-- **Frontend:** Flutter 3.x (Web), Dart
-- **Database:** Google Cloud Firestore
-- **ML/NLP:** Google Gemini API (sentiment analysis)
-- **APIs:** OpenWeatherMap (weather risk)
-- **Design:** Glassmorphism dark theme
+### 📝 Note for Reviewers
+This system is designed for **Scalability**. The transition to a Firestore-based worker queue allows the system to handle thousands of concurrent simulation requests across different user accounts without blocking the main API thread.
