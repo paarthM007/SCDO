@@ -14,6 +14,16 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Set persistence to LOCAL explicitly for web stability
+  try {
+    await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    // Explicitly handle any pending redirect results from a Google Sign-in fallback
+    await FirebaseAuth.instance.getRedirectResult();
+  } catch (e) {
+    debugPrint("AUTH_DEBUG: Initialization error: $e");
+  }
+
   runApp(const SCDOTesterApp());
 }
 
@@ -36,12 +46,25 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // userChanges() is more robust than authStateChanges() as it captures token refreshes
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: FirebaseAuth.instance.userChanges(),
       builder: (context, snapshot) {
-        if (snapshot.hasData) {
+        // Handle waiting state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF0A0A0A),
+            body: Center(child: CircularProgressIndicator(color: Color(0xFF00FFCC))),
+          );
+        }
+
+        final user = snapshot.data;
+        if (user != null) {
+          debugPrint("AUTH_DEBUG: User session active: ${user.uid}");
           return const AppScaffold();
         }
+
+        debugPrint("AUTH_DEBUG: No active session. Showing login.");
         return const LoginScreen();
       },
     );
@@ -59,6 +82,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   String _error = "";
+  bool _isLoading = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -89,6 +113,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _signIn() async {
+    setState(() { _isLoading = true; _error = ""; });
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _email.text.trim(),
@@ -96,10 +121,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
     } catch (e) {
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signUp() async {
+    setState(() { _isLoading = true; _error = ""; });
     try {
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _email.text.trim(),
@@ -107,20 +135,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
     } catch (e) {
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _signInWithGoogle() async {
+    setState(() { _isLoading = true; _error = ""; });
     try {
       GoogleAuthProvider googleProvider = GoogleAuthProvider();
-      final bool isLocalhost = Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1';
-      if (isLocalhost) {
-        await FirebaseAuth.instance.signInWithPopup(googleProvider);
-      } else {
-        await FirebaseAuth.instance.signInWithRedirect(googleProvider);
-      }
+      // Use signInWithPopup for all environments as it's more stable on Flutter Web
+      await FirebaseAuth.instance.signInWithPopup(googleProvider);
     } catch (e) {
       setState(() => _error = "Google Sign-In Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -310,9 +339,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            icon: const Icon(Icons.g_mobiledata, size: 28),
-                            label: const Text("Sign in with Google", style: TextStyle(fontWeight: FontWeight.w600)),
-                            onPressed: _signInWithGoogle,
+                            icon: _isLoading 
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                : const Icon(Icons.g_mobiledata, size: 28),
+                            label: Text(_isLoading ? "AUTHENTICATING..." : "Sign in with Google", style: const TextStyle(fontWeight: FontWeight.w600)),
+                            onPressed: _isLoading ? null : _signInWithGoogle,
                           ),
                         ),
                       ],
