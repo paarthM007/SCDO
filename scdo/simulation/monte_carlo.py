@@ -48,7 +48,7 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                     importance_boost=1.0, facility_configs=None, gmaps=None,
                     combined_risk_score=0.0,
                     # ── v3.0 CTR parameters ──
-                    quantity=None, product_type=None):
+                    quantity=None, product_type=None, path_edges=None):
     """
     Runs DES N times using pure Monte Carlo + importance sampling.
     
@@ -75,7 +75,7 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
 
     for i in range(n_iterations):
         env = simpy.Environment()
-        planner = build_route_with_nodes(env, locations, modes, gmaps, facility_configs)
+        planner = build_route_with_nodes(env, locations, modes, gmaps, facility_configs, path_edges=path_edges)
 
         # Inject importance boost
         if importance_boost != 1.0:
@@ -195,7 +195,7 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
                              target_date=None, n_iterations=50, seed=42,
                              importance_boost=1.0, facility_configs=None,
                              # ── v3.0 CTR parameters ──
-                             quantity=None, product_type=None):
+                             quantity=None, product_type=None, path_edges=None):
     """
     Complete entry point: fetches combined risk, runs MC, returns result dict.
     Called by worker.py.
@@ -228,6 +228,7 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
         combined_risk_score=combined_risk_score,
         quantity=quantity,
         product_type=product_type,
+        path_edges=path_edges,
     )
 
     # Step 3: Assemble result
@@ -272,6 +273,7 @@ def _run_mc_job(job_config):
             facility_configs=job_config.get("facility_configs"),
             quantity=job_config.get("quantity"),
             product_type=job_config.get("product_type"),
+            path_edges=job_config.get("path_edges"),
         )
         return {"job_id": job_id, "status": "done", "result": result, "error": None}
     except Exception as e:

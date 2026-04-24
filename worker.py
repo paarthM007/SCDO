@@ -38,6 +38,7 @@ def process_job(doc_id, data):
             # v3.0 CTR parameters
             quantity=data.get("quantity"),
             product_type=data.get("product_type"),
+            path_edges=data.get("path_edges"),
         )
         doc_ref.update({"status": "completed", "result": result, "completed_at": firestore.SERVER_TIMESTAMP})
         logger.info(f"Job {doc_id} completed successfully.")

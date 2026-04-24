@@ -229,7 +229,7 @@ def api_simulate_path():
     if not path_data or "error" in path_data:
         return _err(f"No valid '{route_key}' route found")
 
-    cities, modes = extract_simulation_params(path_data)
+    cities, modes, edges = extract_simulation_params(path_data)
     if not cities or not modes:
         return _err("Could not extract simulation params from route")
 
@@ -241,6 +241,7 @@ def api_simulate_path():
             "user_id": uid,
             "cities": cities,
             "modes": modes,
+            "path_edges": edges,
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
             # v3.0 CTR parameters

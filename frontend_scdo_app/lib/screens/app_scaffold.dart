@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/screens/dashboard_screen.dart';
@@ -75,9 +76,28 @@ class _AppScaffoldState extends State<AppScaffold> {
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 800;
 
+    Widget mainContent = isDesktop
+        ? Row(
+            children: [
+              _buildSideNav(),
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildTopBar(),
+                    Expanded(child: _screens[_selectedIndex]),
+                  ],
+                ),
+              ),
+            ],
+          )
+        : _screens[_selectedIndex];
+
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: isDesktop ? null : AppBar(
         title: Text(_titles[_selectedIndex]),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: GlassTheme.danger),
@@ -85,22 +105,47 @@ class _AppScaffoldState extends State<AppScaffold> {
           ),
         ],
       ),
-      body: isDesktop
-          ? Row(
-              children: [
-                _buildSideNav(),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTopBar(),
-                      Expanded(child: _screens[_selectedIndex]),
-                    ],
-                  ),
-                ),
-              ],
-            )
-          : _screens[_selectedIndex],
+      body: Stack(
+        children: [
+          // Background glowing orbs
+          Positioned(
+            top: -150,
+            left: -150,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF00FFCC).withOpacity(0.4),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -150,
+            right: -150,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF0066FF).withOpacity(0.4),
+              ),
+            ),
+          ),
+          // Blur filter to create glass background
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),
+            child: Container(color: Colors.transparent),
+          ),
+          // App Content
+          SafeArea(child: mainContent),
+        ],
+      ),
       bottomNavigationBar: isDesktop ? null : BottomNavigationBar(
+        backgroundColor: Colors.black.withOpacity(0.8),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF00FFCC),
+        unselectedItemColor: Colors.white54,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
         items: const [
