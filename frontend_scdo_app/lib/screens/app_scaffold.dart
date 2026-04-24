@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/screens/dashboard_screen.dart';
 import 'package:scdo_app/screens/alt_route_screen.dart';
+import 'package:scdo_app/screens/supply_routes_screen.dart';
+import 'package:scdo_app/screens/route_comparison_screen.dart';
 import 'package:scdo_app/screens/history_screen.dart';
 import 'package:scdo_app/screens/profile_screen.dart';
 import 'package:scdo_app/screens/search_profiles_screen.dart';
@@ -17,21 +19,45 @@ class AppScaffold extends StatefulWidget {
 class _AppScaffoldState extends State<AppScaffold> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const AltRouteScreen(),
-    const HistoryScreen(),
-    const SearchProfilesScreen(),
-    const ProfileScreen(),
-  ];
+  final GlobalKey<RouteComparisonScreenState> _comparisonKey = GlobalKey();
+  Map<String, dynamic>? _multiSupplierData;
+
+  late final List<Widget> _screens;
 
   final List<String> _titles = [
     'Simulation Dashboard',
     'Alternate Routes',
+    'Supply Routes',
+    'Route Comparison',
     'Simulation History',
     'Community Profiles',
     'My Profile',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      const DashboardScreen(),
+      const AltRouteScreen(),
+      SupplyRoutesScreen(
+        onResultsReady: (data) {
+          setState(() {
+            _multiSupplierData = data;
+          });
+          _comparisonKey.currentState?.updateData(data);
+          _onItemTapped(3);
+        },
+      ),
+      RouteComparisonScreen(
+        key: _comparisonKey,
+        routeData: _multiSupplierData,
+      ),
+      const HistoryScreen(),
+      const SearchProfilesScreen(),
+      const ProfileScreen(),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -78,6 +104,8 @@ class _AppScaffoldState extends State<AppScaffold> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Simulate'),
           BottomNavigationBarItem(icon: Icon(Icons.alt_route), label: 'Routes'),
+          BottomNavigationBarItem(icon: Icon(Icons.hub), label: 'Suppliers'),
+          BottomNavigationBarItem(icon: Icon(Icons.compare_arrows), label: 'Compare'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
@@ -155,9 +183,37 @@ class _AppScaffoldState extends State<AppScaffold> {
           const SizedBox(height: 48),
           _navItem(Icons.dashboard, 'Dashboard', 0),
           _navItem(Icons.alt_route, 'Alt Routes', 1),
-          _navItem(Icons.history, 'History', 2),
-          _navItem(Icons.people, 'Community', 3),
-          _navItem(Icons.person, 'My Profile', 4),
+          _navDivider("MULTI-SUPPLIER"),
+          _navItem(Icons.hub, 'Supply Routes', 2),
+          _navItem(Icons.compare_arrows, 'Comparison', 3),
+          _navDivider("ANALYTICS"),
+          _navItem(Icons.history, 'History', 4),
+          _navItem(Icons.people, 'Community', 5),
+          _navItem(Icons.person, 'My Profile', 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _navDivider(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.25),
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
         ],
       ),
     );

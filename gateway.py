@@ -309,6 +309,71 @@ def api_feedback():
         "message": f"{saved} new + {updated} updated rating(s). Thank you!"
     })
 
+@app.route("/api/multi-supplier-routes", methods=["POST"])
+def api_multi_supplier_routes():
+    """Find routes from multiple suppliers to a single buyer.
+    Body: { buyer: "CityName", suppliers: ["City1", "City2", ...],
+            blocked: [...], cargo_type: "general" }
+    Returns route options (fastest/cheapest/balanced) for each supplier→buyer pair.
+    """
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
+
+    data = request.json or {}
+    buyer = data.get("buyer")
+    suppliers = data.get("suppliers", [])
+    blocked = data.get("blocked", [])
+    cargo_type = data.get("cargo_type", "general")
+
+    if not buyer: return _err("Provide 'buyer' city name")
+    if not suppliers or not isinstance(suppliers, list):
+        return _err("Provide 'suppliers' as a list of city names")
+
+    results = []
+    for supplier in suppliers:
+        supplier = supplier.strip()
+        if not supplier:
+            continue
+        route_result = find_alternate_route(
+            origin=supplier,
+            destination=buyer,
+            blocked_nodes=blocked,
+            cargo_type=cargo_type,
+        )
+        results.append({
+            "supplier": supplier,
+            "buyer": buyer,
+            "routes": route_result,
+        })
+
+    # Build a comparison summary
+    comparison = []
+    for r in results:
+        entry = {"supplier": r["supplier"]}
+        for key in ("fastest", "cheapest", "balanced"):
+            route_data = r["routes"].get(key, {})
+            if route_data and "error" not in route_data:
+                entry[key] = {
+                    "total_distance_km": route_data.get("total_distance_km"),
+                    "total_time_h": route_data.get("total_time_h"),
+                    "total_time_readable": route_data.get("total_time_readable"),
+                    "total_cost_usd": route_data.get("total_cost_usd"),
+                    "num_hops": route_data.get("num_hops"),
+                    "modes_used": route_data.get("modes_used"),
+                }
+            else:
+                entry[key] = {"error": route_data.get("error", "No route found")}
+        comparison.append(entry)
+
+    return jsonify({
+        "status": "ok",
+        "buyer": buyer,
+        "supplier_count": len(results),
+        "supplier_routes": results,
+        "comparison": comparison,
+    })
+
 @app.route("/api/cities", methods=["GET"])
 def api_cities():
     q = request.args.get("q", "")
