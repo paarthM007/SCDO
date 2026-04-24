@@ -106,7 +106,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     try {
       String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
-      final response = await http.delete(
+      final response = await http.post(
         Uri.parse("$baseUrl/api/history/$jobId"),
         headers: {
           "Authorization": "Bearer $token",

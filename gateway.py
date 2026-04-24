@@ -180,7 +180,7 @@ def api_history():
         return jsonify({"status": "ok", "analytics": compute_analytics(user_id=uid)})
     return jsonify({"status": "ok", "jobs": get_job_history(user_id=uid)})
 
-@app.route("/api/history/<job_id>", methods=["DELETE"])
+@app.route("/api/history/<job_id>", methods=["DELETE", "POST"])
 def api_delete_history(job_id):
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
