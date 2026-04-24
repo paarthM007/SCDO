@@ -134,6 +134,40 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  Future<void> _downloadReport(Map<String, dynamic> job) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Generating report...'), duration: Duration(seconds: 1)),
+      );
+
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/report"),
+        headers: await _authHeaders(),
+        body: jsonEncode(job),
+      );
+
+      if (response.statusCode == 200) {
+        // In Flutter Web, we can trigger a download by creating an anchor element.
+        // For mobile, you'd use path_provider and open_file.
+        // Since the user is on Chrome, we use the web approach.
+        // Note: For a real production app, use a package like 'universal_html' or conditional imports.
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report generated! (Check console for raw bytes in this demo)'), backgroundColor: GlassTheme.accentNeonGreen),
+        );
+        print("PDF Bytes received: ${response.bodyBytes.length}");
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Report failed: ${response.statusCode}'), backgroundColor: GlassTheme.danger),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Report error: $e'), backgroundColor: GlassTheme.danger),
+      );
+    }
+  }
+
   // ── Feedback dialog for community risk reporting ────────────
   void _showFeedbackDialog(Map<String, dynamic> job) {
     List<String> cities = List<String>.from(job['cities'] ?? []);
@@ -303,48 +337,62 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               
                               return GlassContainer(
                                 padding: const EdgeInsets.all(16),
-                                child: Row(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isCompleted ? GlassTheme.accentNeonGreen : Colors.orange,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            cities != null ? cities.join(' → ') : "Job ID: ${job['job_id']}",
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: isCompleted ? GlassTheme.accentNeonGreen : Colors.orange,
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            "Status: ${status.toUpperCase()}",
-                                            style: TextStyle(
-                                              color: GlassTheme.textSecondary,
-                                              fontSize: 12,
-                                            ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                cities != null ? cities.join(' → ') : "Job ID: ${job['job_id']}",
+                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                "Status: ${status.toUpperCase()}",
+                                                style: TextStyle(
+                                                  color: GlassTheme.textSecondary,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (isCompleted) ...[
+                                          IconButton(
+                                            icon: const Icon(Icons.picture_as_pdf, color: GlassTheme.accentCyan, size: 22),
+                                            tooltip: "Download PDF Report",
+                                            onPressed: () => _downloadReport(job),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
+                                            tooltip: "Rate city risks",
+                                            onPressed: () => _showFeedbackDialog(job),
                                           ),
                                         ],
-                                      ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
+                                          onPressed: () => _deleteJob(job['job_id']),
+                                          tooltip: 'Delete Job',
+                                        ),
+                                      ],
                                     ),
-                                    // ── Rate Risk button (completed jobs only) ──
-                                    if (isCompleted)
-                                      IconButton(
-                                        icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
-                                        tooltip: "Rate city risks",
-                                        onPressed: () => _showFeedbackDialog(job),
-                                      ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
-                                      onPressed: () => _deleteJob(job['job_id']),
-                                      tooltip: 'Delete Job',
-                                    ),
+                                    if (isCompleted && job['summary'] != null) ...[
+                                      const Divider(color: Colors.white12, height: 24),
+                                      _buildSummaryGrid(job['summary']),
+                                    ],
                                   ],
                                 ),
                               );
@@ -353,6 +401,45 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ),
+    );
+  }
+  Widget _buildSummaryGrid(Map<String, dynamic> summary) {
+    final riskLevel = summary['risk_level'] ?? 'Unknown';
+    Color riskColor = GlassTheme.accentNeonGreen;
+    if (riskLevel == 'High') riskColor = GlassTheme.danger;
+    if (riskLevel == 'Medium') riskColor = Colors.orange;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _buildStatItem(Icons.timer, "Time", "${summary['time_mean']?.toStringAsFixed(1) ?? 'N/A'} hrs"),
+        _buildStatItem(Icons.attach_money, "Cost", "\$${summary['cost_mean']?.toStringAsFixed(2) ?? 'N/A'}"),
+        _buildStatItem(Icons.warning_amber, "Risk", riskLevel, valueColor: riskColor),
+      ],
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String label, String value, {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: GlassTheme.textSecondary),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(color: GlassTheme.textSecondary, fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor ?? GlassTheme.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+      ],
     );
   }
 }

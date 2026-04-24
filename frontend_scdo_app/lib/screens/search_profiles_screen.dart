@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/delivery_zone_selector.dart';
 
 class SearchProfilesScreen extends StatefulWidget {
   const SearchProfilesScreen({super.key});
@@ -81,10 +82,18 @@ class _SearchProfilesScreenState extends State<SearchProfilesScreen> {
           productsStr = products.join(" ").toLowerCase();
         }
 
+        // Delivery Zones
+        final dZones = profile['delivery_zones'];
+        String zonesStr = "";
+        if (dZones is List) {
+          zonesStr = getCityNamesFromIds(dZones).join(" ").toLowerCase();
+        }
+
         return location.contains(query) || 
                contact.contains(query) || 
                email.contains(query) || 
-               productsStr.contains(query);
+               productsStr.contains(query) ||
+               zonesStr.contains(query);
       }).toList();
     });
   }
@@ -164,6 +173,13 @@ class _SearchProfilesScreenState extends State<SearchProfilesScreen> {
                                       (profile['products_offered'] is List && profile['products_offered'].isNotEmpty) 
                                         ? profile['products_offered'].join(', ') 
                                         : 'No products listed'
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildInfoRow(
+                                      Icons.local_shipping,
+                                      (profile['delivery_zones'] is List && profile['delivery_zones'].isNotEmpty)
+                                        ? "Delivers to: " + getCityNamesFromIds(profile['delivery_zones']).join(', ')
+                                        : 'No delivery zones'
                                     ),
                                   ],
                                 ),
