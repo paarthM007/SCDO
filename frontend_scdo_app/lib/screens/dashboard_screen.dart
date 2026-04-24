@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import '../app_config.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -13,8 +14,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final String baseUrl = "http://localhost:7860";
-  final String apiKey = "scdo-dev-key-change-me";
+  final String baseUrl = AppConfig.gatewayBaseUrl;
+  final String apiKey = AppConfig.gatewayApiKey;
 
   final TextEditingController _simCities = TextEditingController(text: "Mumbai, Delhi");
   final TextEditingController _simModes = TextEditingController(text: "Road");

@@ -84,11 +84,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ─── NEW OAUTH LOGIC ──────────────────────────────────────────
 
- Future<void> _signInWithGoogle() async {
+  Future<void> _signInWithGoogle() async {
     try {
-      // Use the built-in Firebase Web Provider instead of the buggy package
       GoogleAuthProvider googleProvider = GoogleAuthProvider();
-      await FirebaseAuth.instance.signInWithPopup(googleProvider);
+      
+      // Detect if we are running on localhost or a hosted environment
+      final bool isLocalhost = Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1';
+
+      if (isLocalhost) {
+        // Popups work best for local development
+        await FirebaseAuth.instance.signInWithPopup(googleProvider);
+      } else {
+        // Redirects are required for HuggingFace/hosted environments
+        await FirebaseAuth.instance.signInWithRedirect(googleProvider);
+      }
     } catch (e) {
       setState(() => _error = "Google Sign-In Error: $e");
     }

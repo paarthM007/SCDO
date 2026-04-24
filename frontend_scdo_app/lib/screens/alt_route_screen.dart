@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import '../app_config.dart';
 
 class AltRouteScreen extends StatefulWidget {
   const AltRouteScreen({super.key});
@@ -14,8 +15,8 @@ class AltRouteScreen extends StatefulWidget {
 }
 
 class _AltRouteScreenState extends State<AltRouteScreen> {
-  final String baseUrl = "http://localhost:7860";
-  final String apiKey = "scdo-dev-key-change-me";
+  final String baseUrl = AppConfig.gatewayBaseUrl;
+  final String apiKey = AppConfig.gatewayApiKey;
 
   final TextEditingController _altStart = TextEditingController(text: "Mumbai");
   final TextEditingController _altEnd = TextEditingController(text: "London");
