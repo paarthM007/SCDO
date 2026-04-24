@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/screens/dashboard_screen.dart';
-import 'package:scdo_app/screens/alt_route_screen.dart';
 import 'package:scdo_app/screens/supply_routes_screen.dart';
 import 'package:scdo_app/screens/route_comparison_screen.dart';
 import 'package:scdo_app/screens/history_screen.dart';
@@ -12,7 +10,6 @@ import 'package:scdo_app/screens/search_profiles_screen.dart';
 
 class AppScaffold extends StatefulWidget {
   const AppScaffold({super.key});
-
   @override
   State<AppScaffold> createState() => _AppScaffoldState();
 }
@@ -24,133 +21,52 @@ class _AppScaffoldState extends State<AppScaffold> {
   Map<String, dynamic>? _multiSupplierData;
 
   final List<String> _titles = [
-    'Simulation Dashboard',
-    'Alternate Routes',
-    'Supply Routes',
+    'Route Simulator',
+    'Multi-Supplier Routes',
     'Route Comparison',
     'Simulation History',
-    'Community Profiles',
+    'Community',
     'My Profile',
   ];
 
-  List<Widget> get _screens {
-    return [
-      const DashboardScreen(),
-      const AltRouteScreen(),
-      SupplyRoutesScreen(
-        onResultsReady: (data) {
-          setState(() {
-            _multiSupplierData = data;
-            _selectedIndex = 3; // Auto-switch to comparison tab
-          });
-          // Also try updating via key if it's already mounted
-          _comparisonKey.currentState?.updateData(data);
-        },
-      ),
-      RouteComparisonScreen(
-        key: _comparisonKey,
-        routeData: _multiSupplierData,
-      ),
-      const HistoryScreen(),
-      const SearchProfilesScreen(),
-      const ProfileScreen(),
-    ];
-  }
+  List<Widget> get _screens => [
+    const DashboardScreen(),
+    SupplyRoutesScreen(
+      onResultsReady: (data) {
+        setState(() {
+          _multiSupplierData = data;
+          _selectedIndex = 2;
+        });
+        _comparisonKey.currentState?.updateData(data);
+      },
+    ),
+    RouteComparisonScreen(key: _comparisonKey, routeData: _multiSupplierData),
+    const HistoryScreen(),
+    const SearchProfilesScreen(),
+    const ProfileScreen(),
+  ];
 
   @override
-  void initState() {
-    super.initState();
-  }
+  void initState() { super.initState(); }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  void _signOut() async {
-    await FirebaseAuth.instance.signOut();
-  }
+  void _signOut() async => await FirebaseAuth.instance.signOut();
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 800;
-
-    Widget mainContent = isDesktop
-        ? Row(
-            children: [
-              _buildSideNav(),
-              Expanded(
-                child: Column(
-                  children: [
-                    _buildTopBar(),
-                    Expanded(child: _screens[_selectedIndex]),
-                  ],
-                ),
-              ),
-            ],
-          )
-        : _screens[_selectedIndex];
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      appBar: isDesktop ? null : AppBar(
-        title: Text(_titles[_selectedIndex]),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: GlassTheme.danger),
-            onPressed: _signOut,
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Background glowing orbs
-          Positioned(
-            top: -150,
-            left: -150,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF00FFCC).withOpacity(0.4),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -150,
-            right: -150,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF0066FF).withOpacity(0.4),
-              ),
-            ),
-          ),
-          // Blur filter to create glass background
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 120, sigmaY: 120),
-            child: Container(color: Colors.transparent),
-          ),
-          // App Content
-          SafeArea(child: mainContent),
-        ],
-      ),
+      appBar: isDesktop ? null : AppBar(title: Text(_titles[_selectedIndex]), actions: [
+        IconButton(icon: const Icon(Icons.logout, color: GlassTheme.danger), onPressed: _signOut),
+      ]),
+      body: isDesktop
+          ? Row(children: [_buildSideNav(), Expanded(child: Column(children: [_buildTopBar(), Expanded(child: _screens[_selectedIndex])]))])
+          : _screens[_selectedIndex],
       bottomNavigationBar: isDesktop ? null : BottomNavigationBar(
-        backgroundColor: Colors.black.withOpacity(0.8),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF00FFCC),
-        unselectedItemColor: Colors.white54,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+        currentIndex: _selectedIndex, onTap: _onItemTapped,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Simulate'),
-          BottomNavigationBarItem(icon: Icon(Icons.alt_route), label: 'Routes'),
+          BottomNavigationBarItem(icon: Icon(Icons.route), label: 'Routes'),
           BottomNavigationBarItem(icon: Icon(Icons.hub), label: 'Suppliers'),
           BottomNavigationBarItem(icon: Icon(Icons.compare_arrows), label: 'Compare'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
@@ -163,136 +79,69 @@ class _AppScaffoldState extends State<AppScaffold> {
 
   Widget _buildTopBar() {
     return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      decoration: BoxDecoration(
-        color: GlassTheme.backgroundDark,
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            _titles[_selectedIndex],
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none),
-                onPressed: () {},
-              ),
-              const SizedBox(width: 16),
-              ElevatedButton.icon(
-                onPressed: _signOut,
-                icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Sign Out'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          )
-        ],
-      ),
+      height: 80, padding: const EdgeInsets.symmetric(horizontal: 32),
+      decoration: BoxDecoration(color: GlassTheme.backgroundDark, border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(_titles[_selectedIndex], style: Theme.of(context).textTheme.headlineMedium),
+        Row(children: [
+          IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
+          const SizedBox(width: 16),
+          ElevatedButton.icon(onPressed: _signOut, icon: const Icon(Icons.logout, size: 18), label: const Text('Sign Out'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.1), foregroundColor: Colors.white)),
+        ]),
+      ]),
     );
   }
 
   Widget _buildSideNav() {
-    return Container(
-      width: 280,
-      color: GlassTheme.backgroundCard,
-      child: Column(
-        children: [
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: GlassTheme.accentNeonGreen,
-                ),
-                child: const Icon(Icons.rocket_launch, color: GlassTheme.backgroundDark),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'SCDO',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: GlassTheme.accentNeonGreen,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 48),
-          _navItem(Icons.dashboard, 'Dashboard', 0),
-          _navItem(Icons.alt_route, 'Alt Routes', 1),
-          _navDivider("MULTI-SUPPLIER"),
-          _navItem(Icons.hub, 'Supply Routes', 2),
-          _navItem(Icons.compare_arrows, 'Comparison', 3),
-          _navDivider("ANALYTICS"),
-          _navItem(Icons.history, 'History', 4),
-          _navItem(Icons.people, 'Community', 5),
-          _navItem(Icons.person, 'My Profile', 6),
-        ],
-      ),
-    );
+    return Container(width: 260, color: GlassTheme.backgroundCard, child: Column(children: [
+      const SizedBox(height: 32),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(width: 40, height: 40, decoration: const BoxDecoration(shape: BoxShape.circle, color: GlassTheme.accentNeonGreen),
+          child: const Icon(Icons.rocket_launch, color: GlassTheme.backgroundDark)),
+        const SizedBox(width: 12),
+        Text('SCDO', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: GlassTheme.accentNeonGreen)),
+      ]),
+      const SizedBox(height: 48),
+      _navDivider("ROUTING"),
+      _navItem(Icons.route, 'Route Simulator', 0, "Single origin → destination"),
+      _navItem(Icons.hub, 'Multi-Supplier', 1, "Compare multiple suppliers"),
+      _navItem(Icons.compare_arrows, 'Comparison', 2, "Side-by-side analysis"),
+      _navDivider("ANALYTICS"),
+      _navItem(Icons.history, 'History', 3, "Past simulation results"),
+      _navItem(Icons.people, 'Community', 4, "User profiles & ratings"),
+      _navItem(Icons.person, 'My Profile', 5, "Your account"),
+    ]));
   }
 
   Widget _navDivider(String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.25),
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
-          ),
-          Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
-        ],
-      ),
-    );
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(children: [
+        Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(label, style: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5))),
+        Expanded(child: Divider(color: Colors.white.withOpacity(0.08))),
+      ]));
   }
 
-  Widget _navItem(IconData icon, String label, int index) {
+  Widget _navItem(IconData icon, String label, int index, String subtitle) {
     final isSelected = _selectedIndex == index;
     return InkWell(
       onTap: () => _onItemTapped(index),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         decoration: BoxDecoration(
           color: isSelected ? GlassTheme.accentNeonGreen.withOpacity(0.1) : Colors.transparent,
-          border: isSelected ? const Border(
-            right: BorderSide(color: GlassTheme.accentNeonGreen, width: 4),
-          ) : null,
+          border: isSelected ? const Border(right: BorderSide(color: GlassTheme.accentNeonGreen, width: 4)) : null,
         ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? GlassTheme.accentNeonGreen : GlassTheme.textSecondary,
-            ),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: isSelected ? GlassTheme.accentNeonGreen : GlassTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
+        child: Row(children: [
+          Icon(icon, color: isSelected ? GlassTheme.accentNeonGreen : GlassTheme.textSecondary, size: 22),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: TextStyle(color: isSelected ? GlassTheme.accentNeonGreen : GlassTheme.textPrimary, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
+            Text(subtitle, style: TextStyle(color: GlassTheme.textSecondary.withOpacity(0.6), fontSize: 10)),
+          ])),
+        ]),
       ),
     );
   }

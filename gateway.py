@@ -373,10 +373,17 @@ def api_feedback():
 
 @app.route("/api/multi-supplier-routes", methods=["POST"])
 def api_multi_supplier_routes():
-    """Find routes from multiple suppliers to a single buyer.
-    Body: { buyer: "CityName", suppliers: ["City1", "City2", ...],
-            blocked: [...], cargo_type: "general" }
-    Returns route options (fastest/cheapest/balanced) for each supplier→buyer pair.
+    """Smart multi-supplier routing with automatic disruption detection.
+    Body: {
+        buyer: "CityName",
+        suppliers: ["City1", "City2", ...],
+        cargo_type: "general",
+        risk_threshold: 0.65,       # cities above this are auto-avoided
+        avoid_disruptions: true     # enable/disable auto-avoidance
+    }
+    Two-pass routing:
+      Pass 1 → find optimal route
+      Pass 2 → scan waypoint cities for risk, auto-block high-risk, re-route
     """
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
@@ -385,29 +392,128 @@ def api_multi_supplier_routes():
     data = request.json or {}
     buyer = data.get("buyer")
     suppliers = data.get("suppliers", [])
-    blocked = data.get("blocked", [])
     cargo_type = data.get("cargo_type", "general")
+    risk_threshold = float(data.get("risk_threshold", 0.65))
+    avoid_disruptions = data.get("avoid_disruptions", True)
 
     if not buyer: return _err("Provide 'buyer' city name")
     if not suppliers or not isinstance(suppliers, list):
         return _err("Provide 'suppliers' as a list of city names")
 
+    # Lazy-import risk engine (it calls external APIs)
+    from scdo.risk.combined_risk import compute_combined_risk
+
     results = []
+    all_disruptions = []   # global list of flagged cities for the response
+
     for supplier in suppliers:
         supplier = supplier.strip()
         if not supplier:
             continue
-        route_result = find_alternate_route(
+
+        disruption_report = {
+            "supplier": supplier,
+            "flagged_cities": [],
+            "risk_threshold_used": risk_threshold,
+        }
+
+        # ── Pass 1: Find initial route (no blocks) ──────────────
+        initial_result = find_alternate_route(
             origin=supplier,
             destination=buyer,
-            blocked_nodes=blocked,
+            blocked_nodes=[],
             cargo_type=cargo_type,
         )
+
+        auto_blocked = []
+
+        if avoid_disruptions:
+            # ── Extract waypoint cities from balanced route ──────
+            balanced = initial_result.get("balanced", {})
+            waypoint_cities = []
+            if balanced and "error" not in balanced:
+                waypoints = balanced.get("waypoints", [])
+                for wp in waypoints:
+                    name = wp.get("name", "")
+                    # Don't block origin or destination themselves
+                    if name and name.lower() != supplier.lower() and name.lower() != buyer.lower():
+                        waypoint_cities.append(name)
+
+            # ── Scan waypoints for disruptions ──────────────────
+            if waypoint_cities:
+                try:
+                    risk_result = compute_combined_risk(
+                        waypoint_cities, cargo_type=cargo_type
+                    )
+                    # The risk engine gives per-city data inside weather/sentiment
+                    combined_score = risk_result.get("combined_risk_score", 0)
+                    weather_data = risk_result.get("weather_risk", {})
+                    sentiment_data = risk_result.get("sentiment_risk", {})
+                    community_data = risk_result.get("community_risk", {})
+
+                    # Get per-city weather scores
+                    per_city_weather = weather_data.get("city_scores", {})
+                    per_city_sentiment = sentiment_data.get("city_scores", {})
+                    per_city_community = community_data.get("city_scores", {})
+
+                    for city in waypoint_cities:
+                        # Estimate per-city combined risk
+                        w_score = per_city_weather.get(city, {}).get("normalized", 0)
+                        s_score = per_city_sentiment.get(city, {}).get("normalized", 0)
+                        c_score = per_city_community.get(city, {}).get("normalized", 0)
+
+                        # Same formula as combined_risk.py
+                        base = 1.0 - (1.0 - s_score) * (1.0 - w_score)
+                        synergy = s_score * w_score * 0.40
+                        city_risk = base + synergy
+
+                        reasons = []
+                        if w_score > 0.3:
+                            reasons.append(f"Weather risk: {w_score:.0%}")
+                        if s_score > 0.3:
+                            reasons.append(f"News sentiment: {s_score:.0%}")
+                        if c_score > 0.3:
+                            reasons.append(f"Community reports: {c_score:.0%}")
+
+                        if city_risk >= risk_threshold:
+                            auto_blocked.append(city)
+                            disruption_report["flagged_cities"].append({
+                                "city": city,
+                                "risk_score": round(city_risk, 3),
+                                "reasons": reasons if reasons else ["Combined risk above threshold"],
+                                "action": "auto_avoided",
+                            })
+                        elif city_risk >= risk_threshold * 0.7:
+                            # Warn but don't block
+                            disruption_report["flagged_cities"].append({
+                                "city": city,
+                                "risk_score": round(city_risk, 3),
+                                "reasons": reasons if reasons else ["Elevated risk"],
+                                "action": "warning",
+                            })
+                except Exception as e:
+                    logger.warning(f"Risk scan failed for {supplier}→{buyer}: {e}")
+                    disruption_report["scan_error"] = str(e)
+
+        # ── Pass 2: Re-route if disruptions found ──────────────
+        if auto_blocked:
+            disruption_report["auto_avoided_count"] = len(auto_blocked)
+            route_result = find_alternate_route(
+                origin=supplier,
+                destination=buyer,
+                blocked_nodes=auto_blocked,
+                cargo_type=cargo_type,
+            )
+        else:
+            route_result = initial_result
+
         results.append({
             "supplier": supplier,
             "buyer": buyer,
             "routes": route_result,
+            "disruption_report": disruption_report,
         })
+        all_disruptions.append(disruption_report)
 
     # Build a comparison summary
     comparison = []
@@ -426,14 +532,23 @@ def api_multi_supplier_routes():
                 }
             else:
                 entry[key] = {"error": route_data.get("error", "No route found")}
+        # Include disruption summary in comparison
+        dr = r.get("disruption_report", {})
+        entry["disruptions"] = {
+            "avoided_count": dr.get("auto_avoided_count", 0),
+            "flagged_cities": dr.get("flagged_cities", []),
+        }
         comparison.append(entry)
 
     return jsonify({
         "status": "ok",
         "buyer": buyer,
         "supplier_count": len(results),
+        "risk_threshold": risk_threshold,
+        "avoid_disruptions": avoid_disruptions,
         "supplier_routes": results,
         "comparison": comparison,
+        "disruption_summary": all_disruptions,
     })
 
 @app.route("/api/cities", methods=["GET"])
