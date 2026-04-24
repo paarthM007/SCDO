@@ -40,7 +40,28 @@ class _SearchProfilesScreenState extends State<SearchProfilesScreen> {
           .where('is_public', isEqualTo: true)
           .get();
 
-      final profiles = snapshot.docs.map((doc) => doc.data()).toList();
+      final profiles = snapshot.docs.map((doc) {
+        final data = doc.data();
+        // Pre-calculate searchable text
+        final location = (data['location_data'] ?? '').toString().toLowerCase();
+        final contact = (data['contact'] ?? '').toString().toLowerCase();
+        final email = (data['email'] ?? '').toString().toLowerCase();
+        
+        final products = data['products_offered'];
+        String productsStr = "";
+        if (products is List) {
+          productsStr = products.join(" ").toLowerCase();
+        }
+
+        final dZones = data['delivery_zones'];
+        String zonesStr = "";
+        if (dZones is List) {
+          zonesStr = getCityNamesFromIds(dZones).join(" ").toLowerCase();
+        }
+
+        data['_searchable_text'] = "$location $contact $email $productsStr $zonesStr";
+        return data;
+      }).toList();
       
       if (mounted) {
         setState(() {
@@ -71,29 +92,8 @@ class _SearchProfilesScreenState extends State<SearchProfilesScreen> {
 
     setState(() {
       _filteredProfiles = _allProfiles.where((profile) {
-        final location = (profile['location_data'] ?? '').toString().toLowerCase();
-        final contact = (profile['contact'] ?? '').toString().toLowerCase();
-        final email = (profile['email'] ?? '').toString().toLowerCase();
-        
-        // Products is a list of strings
-        final products = profile['products_offered'];
-        String productsStr = "";
-        if (products is List) {
-          productsStr = products.join(" ").toLowerCase();
-        }
-
-        // Delivery Zones
-        final dZones = profile['delivery_zones'];
-        String zonesStr = "";
-        if (dZones is List) {
-          zonesStr = getCityNamesFromIds(dZones).join(" ").toLowerCase();
-        }
-
-        return location.contains(query) || 
-               contact.contains(query) || 
-               email.contains(query) || 
-               productsStr.contains(query) ||
-               zonesStr.contains(query);
+        final searchable = profile['_searchable_text'] as String? ?? "";
+        return searchable.contains(query);
       }).toList();
     });
   }

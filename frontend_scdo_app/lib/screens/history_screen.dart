@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
 import '../app_config.dart';
@@ -147,14 +148,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       if (response.statusCode == 200) {
         // In Flutter Web, we can trigger a download by creating an anchor element.
-        // For mobile, you'd use path_provider and open_file.
-        // Since the user is on Chrome, we use the web approach.
-        // Note: For a real production app, use a package like 'universal_html' or conditional imports.
-        
+        // Web approach using universal_html
+        final blob = html.Blob([response.bodyBytes], 'application/pdf');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute("download", "scdo_report_${job['id']}.pdf")
+          ..click();
+        html.Url.revokeObjectUrl(url);
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report generated! (Check console for raw bytes in this demo)'), backgroundColor: GlassTheme.accentNeonGreen),
+          const SnackBar(content: Text('Report downloaded successfully!'), backgroundColor: GlassTheme.accentNeonGreen),
         );
-        print("PDF Bytes received: ${response.bodyBytes.length}");
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Report failed: ${response.statusCode}'), backgroundColor: GlassTheme.danger),

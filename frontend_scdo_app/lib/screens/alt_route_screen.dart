@@ -553,6 +553,7 @@ class _AltRouteScreenState extends State<AltRouteScreen>
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               value: _productType,
                               decoration: const InputDecoration(
                                 labelText: "Product Type",
