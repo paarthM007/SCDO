@@ -94,7 +94,8 @@ def _err(msg, code=400):
 def health():
     g = get_graph()
     return jsonify({
-        "status": "ok", "version": "2.0",
+        "status": "ok", "version": "3.0",
+        "engine": "CTR Tensor Routing",
         "nodes": len(g.nodes),
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
@@ -120,6 +121,9 @@ def api_simulate():
             "modes": modes,
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
+            # v3.0 CTR parameters
+            "quantity": data.get("quantity"),
+            "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
             "source": "api_simulate"
@@ -135,22 +139,63 @@ def api_simulate():
 
 @app.route("/api/alternate-route", methods=["POST"])
 def api_alternate_route():
-    """Return path options only — no simulation is triggered."""
+    """
+    Return path options only — no simulation is triggered.
+    v3.0: Accepts quantity, product_type, budget, deadline_h, omega.
+    """
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
     if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
     data = request.json or {}
+
+    # Parse v3.0 CTR parameters
+    quantity = data.get("quantity")
+    if quantity is not None:
+        try:
+            quantity = float(quantity)
+        except (ValueError, TypeError):
+            quantity = None
+
+    budget = data.get("budget")
+    if budget is not None:
+        try:
+            budget = float(budget)
+        except (ValueError, TypeError):
+            budget = None
+
+    deadline_h = data.get("deadline_h")
+    if deadline_h is not None:
+        try:
+            deadline_h = float(deadline_h)
+        except (ValueError, TypeError):
+            deadline_h = None
+
+    omega = data.get("omega")
+    if omega is not None:
+        try:
+            omega = max(0.0, min(1.0, float(omega)))
+        except (ValueError, TypeError):
+            omega = None
+
     result = find_alternate_route(
         origin=data.get("start"),
         destination=data.get("end"),
         blocked_nodes=data.get("blocked", []),
-        cargo_type=data.get("cargo_type", "general")
+        cargo_type=data.get("cargo_type", "general"),
+        quantity=quantity,
+        product_type=data.get("product_type"),
+        budget=budget,
+        deadline_h=deadline_h,
+        omega=omega,
     )
     return jsonify({"status": "ok", "result": result})
 
 @app.route("/api/simulate-path", methods=["POST"])
 def api_simulate_path():
-    """Simulate a single chosen path (fastest / cheapest / balanced)."""
+    """
+    Simulate a single chosen path (fastest / cheapest / balanced).
+    v3.0: Passes CTR parameters to simulation engine.
+    """
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
     if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
@@ -160,12 +205,25 @@ def api_simulate_path():
     if route_key not in ("fastest", "cheapest", "balanced"):
         return _err("route_key must be one of: fastest, cheapest, balanced")
 
+    # Parse v3.0 CTR parameters
+    quantity = data.get("quantity")
+    if quantity is not None:
+        try:
+            quantity = float(quantity)
+        except (ValueError, TypeError):
+            quantity = None
+
     # Re-compute the specific route so we have path_edges
     result = find_alternate_route(
         origin=data.get("start"),
         destination=data.get("end"),
         blocked_nodes=data.get("blocked", []),
-        cargo_type=data.get("cargo_type", "general")
+        cargo_type=data.get("cargo_type", "general"),
+        quantity=quantity,
+        product_type=data.get("product_type"),
+        budget=data.get("budget"),
+        deadline_h=data.get("deadline_h"),
+        omega=data.get("omega"),
     )
     path_data = result.get(route_key)
     if not path_data or "error" in path_data:
@@ -185,6 +243,9 @@ def api_simulate_path():
             "modes": modes,
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
+            # v3.0 CTR parameters
+            "quantity": quantity,
+            "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
             "source": f"alternate_route_{route_key}"

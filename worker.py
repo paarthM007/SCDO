@@ -34,7 +34,10 @@ def process_job(doc_id, data):
             cities=data.get("cities", []),
             modes=data.get("modes", []),
             cargo_type=data.get("cargo_type", "general"),
-            n_iterations=data.get("n_iterations", 50)
+            n_iterations=data.get("n_iterations", 50),
+            # v3.0 CTR parameters
+            quantity=data.get("quantity"),
+            product_type=data.get("product_type"),
         )
         doc_ref.update({"status": "completed", "result": result, "completed_at": firestore.SERVER_TIMESTAMP})
         logger.info(f"Job {doc_id} completed successfully.")

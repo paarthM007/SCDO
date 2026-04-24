@@ -1,6 +1,13 @@
 """
-router.py - High-level routing API with alternate route + blocked node support.
-Implements Functionality 2: find alternate route avoiding blocked cities.
+router.py - High-level routing API with cargo-aware CTR routing.
+SCDO Logistics Engine v3.0: Multi-factor logistics modeling.
+
+Supports:
+  - Quantity-dependent dynamic edge weights
+  - Product-type cargo restrictions  
+  - Budget constraint pruning
+  - Feasibility Index (F_idx) computation
+  - User preference toggle (omega: 0=time, 1=cost)
 """
 import time
 import logging
@@ -8,7 +15,12 @@ from typing import List, Optional, Set
 from scdo.routing.cities_data import get_all_nodes
 from scdo.routing.graph import (
     GlobalRoutingGraph, build_graph, dijkstra, find_node_id,
-    get_all_city_names, fmt_time, MODE_SETS, MODE_ICONS
+    get_all_city_names, fmt_time, MODE_SETS, MODE_ICONS,
+    compute_feasibility_index, compute_edge_cost, compute_edge_time,
+)
+from scdo.config import (
+    DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
+    DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,7 +37,10 @@ def get_graph() -> GlobalRoutingGraph:
     return _GRAPH
 
 
-def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective):
+def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
+                  # v3.0 shipment context
+                  quantity=None, product_type=None, budget=None, deadline_h=None,
+                  omega=None, risk_score=0.0):
     """Build a full route result dict from path edges."""
     total_km = sum(e["dist_km"] for e in path_edges)
     total_h = sum(e["time_h"] for e in path_edges)
@@ -41,6 +56,7 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective):
             n = graph.nodes[e["to_id"]]
             waypoints.append({"name": n["name"], "lat": n["lat"], "lon": n["lon"],
                               "mode": e["mode"], "dist_km": e["dist_km"],
+                              "time_h": e["time_h"],
                               "is_port": n["is_port"], "is_airport": n["is_airport"]})
 
     # Build segments (group consecutive same-mode edges)
@@ -62,7 +78,8 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective):
 
     src_node = graph.nodes[src_id]
     dst_node = graph.nodes[dst_id]
-    return {
+
+    result = {
         "origin": src_node["name"], "origin_id": src_id,
         "origin_coords": {"lat": src_node["lat"], "lon": src_node["lon"]},
         "destination": dst_node["name"], "destination_id": dst_id,
@@ -78,6 +95,61 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective):
         "segments": segments,
         "path_edges": path_edges,
     }
+    
+    # ── v3.0: Background Graph Context ──
+    # Gather edges adjacent to path nodes for geographic context rendering
+    bg_edges = []
+    if path_edges:
+        path_nodes = {e["from_id"] for e in path_edges} | {e["to_id"] for e in path_edges}
+        seen_edges = set()
+        for nid in path_nodes:
+            for edge in graph.neighbours(nid):
+                # Unique edge identifier
+                e_id = tuple(sorted([nid, edge["to"]])) + (edge["mode"],)
+                if e_id not in seen_edges:
+                    seen_edges.add(e_id)
+                    # Don't add edges that are already in path_edges
+                    is_path_edge = any(
+                        (pe["from_id"] == nid and pe["to_id"] == edge["to"] and pe["mode"] == edge["mode"]) or
+                        (pe["to_id"] == nid and pe["from_id"] == edge["to"] and pe["mode"] == edge["mode"])
+                        for pe in path_edges
+                    )
+                    if not is_path_edge:
+                        n_to = graph.nodes[edge["to"]]
+                        n_from = graph.nodes[nid]
+                        bg_edges.append({
+                            "from_id": nid, "to_id": edge["to"],
+                            "from_lat": n_from["lat"], "from_lon": n_from["lon"],
+                            "to_lat": n_to["lat"], "to_lon": n_to["lon"],
+                            "mode": edge["mode"]
+                        })
+    result["background_edges"] = bg_edges
+
+    # ── v3.0: Shipment Context ──
+    if quantity is not None:
+        result["shipment"] = {
+            "quantity": quantity,
+            "product_type": product_type or DEFAULT_PRODUCT_TYPE,
+            "omega": omega if omega is not None else DEFAULT_OMEGA,
+            "risk_score": round(risk_score, 4),
+        }
+
+    # ── v3.0: Feasibility Index ──
+    effective_budget = budget if budget is not None else DEFAULT_MAX_BUDGET
+    effective_deadline = deadline_h if deadline_h is not None else DEFAULT_DEADLINE_H
+    f_idx = compute_feasibility_index(total_cost, total_h, effective_budget, effective_deadline)
+    result["feasibility_index"] = f_idx
+
+    # Determine feasibility warnings
+    warnings = []
+    if budget is not None and total_cost > budget:
+        warnings.append(f"Over Budget: ${total_cost:.0f} > ${budget:.0f}")
+    if deadline_h is not None and total_h > deadline_h:
+        warnings.append(f"Over Deadline: {fmt_time(total_h)} > {fmt_time(deadline_h)}")
+    if warnings:
+        result["feasibility_warnings"] = warnings
+
+    return result
 
 
 def _make_seg(mode, start, edges):
@@ -94,10 +166,16 @@ def _make_seg(mode, start, edges):
 
 
 def find_route(origin, destination, mode_pref="BEST",
-               objective="FASTEST", blocked_nodes=None):
+               objective="FASTEST", blocked_nodes=None,
+               # ── v3.0 CTR shipment parameters ──
+               quantity=None, product_type=None, risk_score=0.0,
+               omega=None, max_budget=None, deadline_h=None):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.
+    
+    v3.0: When quantity/product_type are provided, uses CTR Tensor
+    dynamic edge weighting with cargo-aware constraint pruning.
     """
     graph = get_graph()
     src_id = find_node_id(graph, origin)
@@ -118,7 +196,11 @@ def find_route(origin, destination, mode_pref="BEST",
                 logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
 
     try:
-        _, path_edges = dijkstra(graph, src_id, dst_id, allowed, objective, blocked_ids)
+        _, path_edges = dijkstra(
+            graph, src_id, dst_id, allowed, objective, blocked_ids,
+            quantity=quantity, product_type=product_type,
+            risk_score=risk_score, omega=omega, max_budget=max_budget,
+        )
     except ValueError as e:
         return {"error": str(e)}
 
@@ -126,20 +208,34 @@ def find_route(origin, destination, mode_pref="BEST",
         msg = "No route found"
         if blocked_ids:
             msg += f" (avoiding {len(blocked_ids)} blocked nodes)"
+        if product_type and product_type != "general":
+            msg += f" for cargo type '{product_type}'"
+        if quantity and quantity < 100:
+            msg += f" (quantity {quantity} may be below mode thresholds)"
         return {"origin": graph.nodes[src_id]["name"],
                 "destination": graph.nodes[dst_id]["name"], "error": msg}
 
-    result = _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective)
+    result = _build_result(
+        graph, src_id, dst_id, path_edges, mode_pref, objective,
+        quantity=quantity, product_type=product_type,
+        budget=max_budget, deadline_h=deadline_h,
+        omega=omega, risk_score=risk_score,
+    )
     if blocked_ids:
         result["blocked_nodes"] = [graph.nodes[bid]["name"] for bid in blocked_ids if bid in graph.nodes]
     return result
 
 
 def find_alternate_route(origin, destination, blocked_nodes,
-                         cargo_type="general", mode_pref=None):
+                         cargo_type="general", mode_pref=None,
+                         # ── v3.0 CTR parameters ──
+                         quantity=None, product_type=None,
+                         budget=None, deadline_h=None, omega=None):
     """
     Functionality 2: Find best alternate route avoiding blocked cities.
     Returns comparison of fastest, cheapest, balanced routes.
+    
+    v3.0: Forwards CTR shipment parameters to each sub-query.
     """
     CARGO_MODE_MAP = {
         "frozen_food": "AIR", "perishable": "AIR", "live_animals": "AIR",
@@ -147,10 +243,16 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "vehicles": "SEA", "general": "BEST", "electronics": "BEST",
     }
     effective_mode = mode_pref or CARGO_MODE_MAP.get(cargo_type, "BEST")
+    effective_product = product_type or cargo_type
 
     results = {}
     for obj in ("FASTEST", "CHEAPEST", "BALANCED"):
-        r = find_route(origin, destination, effective_mode, obj, blocked_nodes)
+        r = find_route(
+            origin, destination, effective_mode, obj, blocked_nodes,
+            quantity=quantity, product_type=effective_product,
+            risk_score=0.0, omega=omega, max_budget=budget,
+            deadline_h=deadline_h,
+        )
         results[obj.lower()] = r
 
     graph = get_graph()
@@ -163,6 +265,14 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "blocked_nodes": blocked_nodes,
         "cargo_type": cargo_type,
         "effective_mode": effective_mode,
+        # v3.0 shipment context echoed back
+        "shipment_params": {
+            "quantity": quantity,
+            "product_type": effective_product,
+            "budget": budget,
+            "deadline_h": deadline_h,
+            "omega": omega,
+        },
         "fastest": results.get("fastest"),
         "cheapest": results.get("cheapest"),
         "balanced": results.get("balanced"),
