@@ -46,7 +46,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
     return {
       "Authorization": "Bearer $token",
-      "X-API-Key": apiKey,
       "Content-Type": "application/json",
     };
   }
