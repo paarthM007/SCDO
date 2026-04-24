@@ -19,7 +19,14 @@ class AppScaffold extends StatefulWidget {
 class _AppScaffoldState extends State<AppScaffold> {
   int _selectedIndex = 0;
 
+<<<<<<< Updated upstream
   final GlobalKey<RouteComparisonScreenState> _comparisonKey = GlobalKey();
+=======
+  // GlobalKey to push data into RouteComparisonScreen
+  final GlobalKey<RouteComparisonScreenState> _comparisonKey = GlobalKey();
+
+  // Route data shared between Supply Routes → Route Comparison
+>>>>>>> Stashed changes
   Map<String, dynamic>? _multiSupplierData;
 
   late final List<Widget> _screens;
@@ -45,7 +52,13 @@ class _AppScaffoldState extends State<AppScaffold> {
           setState(() {
             _multiSupplierData = data;
           });
+<<<<<<< Updated upstream
           _comparisonKey.currentState?.updateData(data);
+=======
+          // Push data to comparison screen via GlobalKey
+          _comparisonKey.currentState?.updateData(data);
+          // Auto-switch to comparison tab
+>>>>>>> Stashed changes
           _onItemTapped(3);
         },
       ),

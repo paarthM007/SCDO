@@ -7,6 +7,9 @@ sdk: docker
 pinned: false
 ---
 
+flutter run -d web-server --web-port 8080
+python gateway.py
+
 # SCDO v2.0 - Supply Chain Disruption Oracle
 Modularized simulation engine and routing API.
 

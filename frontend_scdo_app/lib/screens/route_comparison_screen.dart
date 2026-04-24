@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+<<<<<<< Updated upstream
+=======
+import 'dart:convert';
+import 'package:google_fonts/google_fonts.dart';
+>>>>>>> Stashed changes
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
 
@@ -13,7 +18,11 @@ class RouteComparisonScreen extends StatefulWidget {
 
 class RouteComparisonScreenState extends State<RouteComparisonScreen> {
   Map<String, dynamic>? _data;
+<<<<<<< Updated upstream
   String _selectedObjective = "balanced";
+=======
+  String _selectedObjective = "balanced"; // fastest | cheapest | balanced
+>>>>>>> Stashed changes
 
   @override
   void initState() {
@@ -42,8 +51,16 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     }
 
     final buyer = _data!["buyer"] ?? "Unknown";
+<<<<<<< Updated upstream
     final supplierRoutes = (_data!["supplier_routes"] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final comparison = (_data!["comparison"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+=======
+    final supplierRoutes =
+        (_data!["supplier_routes"] as List?)?.cast<Map<String, dynamic>>() ??
+            [];
+    final comparison =
+        (_data!["comparison"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+>>>>>>> Stashed changes
 
     if (supplierRoutes.isEmpty) {
       return _buildEmptyState(context);
@@ -54,6 +71,10 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+<<<<<<< Updated upstream
+=======
+          // ── Header ──────────────────────────────────────────
+>>>>>>> Stashed changes
           Row(
             children: [
               Container(
@@ -62,13 +83,19 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                   color: Colors.purpleAccent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
+<<<<<<< Updated upstream
                 child: const Icon(Icons.compare_arrows, color: Colors.purpleAccent, size: 28),
+=======
+                child: const Icon(Icons.compare_arrows,
+                    color: Colors.purpleAccent, size: 28),
+>>>>>>> Stashed changes
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+<<<<<<< Updated upstream
                     Text('Route Comparison', style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 4),
                     Text('Comparing ${supplierRoutes.length} supplier route(s) to $buyer', style: Theme.of(context).textTheme.bodyMedium),
@@ -78,16 +105,39 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
               _objectiveChip("fastest", Icons.speed, Colors.orangeAccent),
               const SizedBox(width: 8),
               _objectiveChip("cheapest", Icons.savings, GlassTheme.accentNeonGreen),
+=======
+                    Text('Route Comparison',
+                        style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Comparing ${supplierRoutes.length} supplier route(s) to $buyer',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              // Objective selector
+              _objectiveChip("fastest", Icons.speed, Colors.orangeAccent),
+              const SizedBox(width: 8),
+              _objectiveChip(
+                  "cheapest", Icons.savings, GlassTheme.accentNeonGreen),
+>>>>>>> Stashed changes
               const SizedBox(width: 8),
               _objectiveChip("balanced", Icons.balance, GlassTheme.accentCyan),
             ],
           ),
           const SizedBox(height: 24),
+<<<<<<< Updated upstream
+=======
+
+          // ── Comparison table ────────────────────────────────
+>>>>>>> Stashed changes
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+<<<<<<< Updated upstream
                   _buildComparisonHeader(),
                   const SizedBox(height: 8),
                   ...comparison.asMap().entries.map((entry) {
@@ -95,6 +145,21 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                   }),
                   const SizedBox(height: 32),
                   Text("Detailed Route Breakdown", style: Theme.of(context).textTheme.titleLarge),
+=======
+                  // Table header
+                  _buildComparisonHeader(),
+                  const SizedBox(height: 8),
+                  // Table rows
+                  ...comparison.asMap().entries.map((entry) {
+                    return _buildComparisonRow(
+                        entry.key, entry.value, supplierRoutes);
+                  }),
+                  const SizedBox(height: 32),
+
+                  // ── Detailed cards per supplier ─────────────
+                  Text("Detailed Route Breakdown",
+                      style: Theme.of(context).textTheme.titleLarge),
+>>>>>>> Stashed changes
                   const SizedBox(height: 16),
                   ...supplierRoutes.asMap().entries.map((entry) {
                     return Padding(
@@ -122,7 +187,14 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
         decoration: BoxDecoration(
           color: isSelected ? color.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
+<<<<<<< Updated upstream
           border: Border.all(color: isSelected ? color : Colors.white.withOpacity(0.1), width: isSelected ? 1.5 : 1),
+=======
+          border: Border.all(
+            color: isSelected ? color : Colors.white.withOpacity(0.1),
+            width: isSelected ? 1.5 : 1,
+          ),
+>>>>>>> Stashed changes
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -150,14 +222,44 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
       borderColor: Colors.white.withOpacity(0.15),
       child: Row(
         children: [
+<<<<<<< Updated upstream
           const SizedBox(width: 40, child: Text("#", style: TextStyle(fontWeight: FontWeight.bold, color: GlassTheme.textSecondary, fontSize: 13))),
           const Expanded(flex: 3, child: Text("SUPPLIER", style: TextStyle(fontWeight: FontWeight.bold, color: GlassTheme.textSecondary, fontSize: 13, letterSpacing: 1))),
+=======
+          const SizedBox(
+              width: 40,
+              child: Text("#",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: GlassTheme.textSecondary,
+                      fontSize: 13))),
+          const Expanded(
+              flex: 3,
+              child: Text("SUPPLIER",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: GlassTheme.textSecondary,
+                      fontSize: 13,
+                      letterSpacing: 1))),
+>>>>>>> Stashed changes
           _headerCell("DISTANCE"),
           _headerCell("TIME"),
           _headerCell("COST"),
           _headerCell("HOPS"),
           _headerCell("MODES"),
+<<<<<<< Updated upstream
           const SizedBox(width: 80, child: Text("STATUS", textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: GlassTheme.textSecondary, fontSize: 13, letterSpacing: 1))),
+=======
+          const SizedBox(
+              width: 80,
+              child: Text("STATUS",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: GlassTheme.textSecondary,
+                      fontSize: 13,
+                      letterSpacing: 1))),
+>>>>>>> Stashed changes
         ],
       ),
     );
@@ -166,21 +268,46 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
   Widget _headerCell(String label) {
     return Expanded(
       flex: 2,
+<<<<<<< Updated upstream
       child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, color: GlassTheme.textSecondary, fontSize: 13, letterSpacing: 1)),
     );
   }
 
   Widget _buildComparisonRow(int index, Map<String, dynamic> item, List<Map<String, dynamic>> allRoutes) {
+=======
+      child: Text(label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: GlassTheme.textSecondary,
+              fontSize: 13,
+              letterSpacing: 1)),
+    );
+  }
+
+  Widget _buildComparisonRow(int index, Map<String, dynamic> item,
+      List<Map<String, dynamic>> allRoutes) {
+>>>>>>> Stashed changes
     final supplier = item["supplier"] ?? "Unknown";
     final routeData = item[_selectedObjective];
     final hasRoute = routeData != null && !routeData.containsKey("error");
 
+<<<<<<< Updated upstream
+=======
+    // Determine if this is the best by cost for the selected objective
+>>>>>>> Stashed changes
     double? thisCost;
     double? bestCost;
     if (hasRoute) {
       thisCost = (routeData["total_cost_usd"] as num?)?.toDouble();
     }
+<<<<<<< Updated upstream
     final allComparison = (_data!["comparison"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+=======
+    // Find best cost among all comparisons
+    final allComparison =
+        (_data!["comparison"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+>>>>>>> Stashed changes
     for (var c in allComparison) {
       final rd = c[_selectedObjective];
       if (rd != null && !rd.containsKey("error")) {
@@ -192,14 +319,32 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     }
     final isBest = thisCost != null && bestCost != null && thisCost == bestCost;
 
+<<<<<<< Updated upstream
     final rowColors = [GlassTheme.accentCyan, Colors.purpleAccent, Colors.orangeAccent, GlassTheme.accentNeonGreen, Colors.pinkAccent, Colors.tealAccent];
+=======
+    // Color gradient for rows
+    final rowColors = [
+      GlassTheme.accentCyan,
+      Colors.purpleAccent,
+      Colors.orangeAccent,
+      GlassTheme.accentNeonGreen,
+      Colors.pinkAccent,
+      Colors.tealAccent,
+    ];
+>>>>>>> Stashed changes
     final rowColor = rowColors[index % rowColors.length];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       child: GlassContainer(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+<<<<<<< Updated upstream
         borderColor: isBest ? GlassTheme.accentNeonGreen.withOpacity(0.5) : Colors.white.withOpacity(0.05),
+=======
+        borderColor: isBest
+            ? GlassTheme.accentNeonGreen.withOpacity(0.5)
+            : Colors.white.withOpacity(0.05),
+>>>>>>> Stashed changes
         child: Row(
           children: [
             SizedBox(
@@ -208,14 +353,27 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                 width: 28,
                 height: 28,
                 alignment: Alignment.center,
+<<<<<<< Updated upstream
                 decoration: BoxDecoration(color: rowColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
                 child: Text("${index + 1}", style: TextStyle(color: rowColor, fontWeight: FontWeight.bold, fontSize: 13)),
+=======
+                decoration: BoxDecoration(
+                  color: rowColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text("${index + 1}",
+                    style: TextStyle(
+                        color: rowColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
+>>>>>>> Stashed changes
               ),
             ),
             Expanded(
               flex: 3,
               child: Row(
                 children: [
+<<<<<<< Updated upstream
                   Text(supplier, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   if (isBest) ...[
                     const SizedBox(width: 8),
@@ -223,28 +381,79 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: GlassTheme.accentNeonGreen.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
                       child: const Text("★ BEST", style: TextStyle(color: GlassTheme.accentNeonGreen, fontSize: 9, fontWeight: FontWeight.bold)),
+=======
+                  Text(supplier,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  if (isBest) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: GlassTheme.accentNeonGreen.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text("★ BEST",
+                          style: TextStyle(
+                              color: GlassTheme.accentNeonGreen,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold)),
+>>>>>>> Stashed changes
                     ),
                   ],
                 ],
               ),
             ),
+<<<<<<< Updated upstream
             _dataCell(hasRoute ? "${routeData['total_distance_km']} km" : "—"),
             _dataCell(hasRoute ? "${routeData['total_time_readable']}" : "—"),
             _dataCell(hasRoute ? "\$${routeData['total_cost_usd']}" : "—"),
             _dataCell(hasRoute ? "${routeData['num_hops']}" : "—"),
             _dataCell(hasRoute ? (routeData['modes_used'] as List?)?.join(", ") ?? "—" : "—"),
+=======
+            _dataCell(
+                hasRoute ? "${routeData['total_distance_km']} km" : "—"),
+            _dataCell(
+                hasRoute ? "${routeData['total_time_readable']}" : "—"),
+            _dataCell(hasRoute ? "\$${routeData['total_cost_usd']}" : "—"),
+            _dataCell(hasRoute ? "${routeData['num_hops']}" : "—"),
+            _dataCell(hasRoute
+                ? (routeData['modes_used'] as List?)?.join(", ") ?? "—"
+                : "—"),
+>>>>>>> Stashed changes
             SizedBox(
               width: 80,
               child: Center(
                 child: Container(
+<<<<<<< Updated upstream
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: (hasRoute ? GlassTheme.accentNeonGreen : GlassTheme.danger).withOpacity(0.15),
+=======
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (hasRoute
+                            ? GlassTheme.accentNeonGreen
+                            : GlassTheme.danger)
+                        .withOpacity(0.15),
+>>>>>>> Stashed changes
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     hasRoute ? "OK" : "FAIL",
+<<<<<<< Updated upstream
                     style: TextStyle(color: hasRoute ? GlassTheme.accentNeonGreen : GlassTheme.danger, fontSize: 11, fontWeight: FontWeight.bold),
+=======
+                    style: TextStyle(
+                      color: hasRoute
+                          ? GlassTheme.accentNeonGreen
+                          : GlassTheme.danger,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+>>>>>>> Stashed changes
                   ),
                 ),
               ),
@@ -258,7 +467,13 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
   Widget _dataCell(String text) {
     return Expanded(
       flex: 2,
+<<<<<<< Updated upstream
       child: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: GlassTheme.textPrimary)),
+=======
+      child: Text(text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: GlassTheme.textPrimary)),
+>>>>>>> Stashed changes
     );
   }
 
@@ -267,7 +482,18 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     final buyer = supplierRoute["buyer"] ?? "Unknown";
     final routes = supplierRoute["routes"] as Map<String, dynamic>? ?? {};
 
+<<<<<<< Updated upstream
     final rowColors = [GlassTheme.accentCyan, Colors.purpleAccent, Colors.orangeAccent, GlassTheme.accentNeonGreen, Colors.pinkAccent, Colors.tealAccent];
+=======
+    final rowColors = [
+      GlassTheme.accentCyan,
+      Colors.purpleAccent,
+      Colors.orangeAccent,
+      GlassTheme.accentNeonGreen,
+      Colors.pinkAccent,
+      Colors.tealAccent,
+    ];
+>>>>>>> Stashed changes
     final accentColor = rowColors[index % rowColors.length];
 
     return GlassContainer(
@@ -275,11 +501,22 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+<<<<<<< Updated upstream
+=======
+          // Card header
+>>>>>>> Stashed changes
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
+<<<<<<< Updated upstream
                 decoration: BoxDecoration(color: accentColor.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+=======
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+>>>>>>> Stashed changes
                 child: Icon(Icons.factory, color: accentColor, size: 22),
               ),
               const SizedBox(width: 14),
@@ -287,6 +524,7 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+<<<<<<< Updated upstream
                     Text(supplier, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: accentColor)),
                     const SizedBox(height: 2),
                     Row(
@@ -294,6 +532,22 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                         const Icon(Icons.arrow_forward, size: 14, color: GlassTheme.textSecondary),
                         const SizedBox(width: 4),
                         Text(buyer, style: const TextStyle(color: GlassTheme.textSecondary, fontSize: 13)),
+=======
+                    Text(supplier,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: accentColor)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.arrow_forward,
+                            size: 14, color: GlassTheme.textSecondary),
+                        const SizedBox(width: 4),
+                        Text(buyer,
+                            style: const TextStyle(
+                                color: GlassTheme.textSecondary, fontSize: 13)),
+>>>>>>> Stashed changes
                       ],
                     ),
                   ],
@@ -302,6 +556,7 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
             ],
           ),
           const SizedBox(height: 20),
+<<<<<<< Updated upstream
           Row(
             children: [
               Expanded(child: _variantMini("Fastest", Icons.speed, Colors.orangeAccent, routes["fastest"])),
@@ -316,17 +571,68 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
             const Divider(color: Colors.white10),
             const SizedBox(height: 8),
             Text("Balanced Route Waypoints", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+=======
+
+          // Three route variants side by side
+          Row(
+            children: [
+              Expanded(
+                  child: _variantMini(
+                      "Fastest",
+                      Icons.speed,
+                      Colors.orangeAccent,
+                      routes["fastest"])),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _variantMini(
+                      "Cheapest",
+                      Icons.savings,
+                      GlassTheme.accentNeonGreen,
+                      routes["cheapest"])),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _variantMini(
+                      "Balanced",
+                      Icons.balance,
+                      GlassTheme.accentCyan,
+                      routes["balanced"])),
+            ],
+          ),
+
+          // Waypoints preview for balanced route
+          if (routes["balanced"] != null &&
+              routes["balanced"]["waypoints"] != null) ...[
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white10),
+            const SizedBox(height: 8),
+            Text("Balanced Route Waypoints",
+                style: TextStyle(
+                    color: GlassTheme.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold)),
+>>>>>>> Stashed changes
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
+<<<<<<< Updated upstream
               children: (routes["balanced"]["waypoints"] as List).asMap().entries.map((e) {
                 final wp = e.value;
                 final isLast = e.key == (routes["balanced"]["waypoints"] as List).length - 1;
+=======
+              children: (routes["balanced"]["waypoints"] as List)
+                  .asMap()
+                  .entries
+                  .map((e) {
+                final wp = e.value;
+                final isLast = e.key ==
+                    (routes["balanced"]["waypoints"] as List).length - 1;
+>>>>>>> Stashed changes
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
+<<<<<<< Updated upstream
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: accentColor.withOpacity(0.1),
@@ -336,6 +642,28 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
                       child: Text(wp["name"] ?? "", style: TextStyle(fontSize: 11, color: accentColor, fontWeight: FontWeight.w500)),
                     ),
                     if (!isLast) Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(Icons.chevron_right, size: 14, color: Colors.white24)),
+=======
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: accentColor.withOpacity(0.2)),
+                      ),
+                      child: Text(wp["name"] ?? "",
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: accentColor,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    if (!isLast)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Icon(Icons.chevron_right,
+                            size: 14, color: Colors.white24),
+                      ),
+>>>>>>> Stashed changes
                   ],
                 );
               }).toList(),
@@ -346,8 +674,15 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     );
   }
 
+<<<<<<< Updated upstream
   Widget _variantMini(String label, IconData icon, Color color, Map<String, dynamic>? data) {
     final hasRoute = data != null && !data.containsKey("error");
+=======
+  Widget _variantMini(
+      String label, IconData icon, Color color, Map<String, dynamic>? data) {
+    final hasRoute = data != null && !data.containsKey("error");
+
+>>>>>>> Stashed changes
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -362,7 +697,15 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 6),
+<<<<<<< Updated upstream
               Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+=======
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12)),
+>>>>>>> Stashed changes
             ],
           ),
           const SizedBox(height: 10),
@@ -372,7 +715,13 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
             _metricRow("Cost", "\$${data['total_cost_usd']}"),
             _metricRow("Hops", "${data['num_hops']}"),
           ] else
+<<<<<<< Updated upstream
             Text(data?["error"] ?? "No route", style: const TextStyle(color: GlassTheme.danger, fontSize: 11)),
+=======
+            Text(data?["error"] ?? "No route",
+                style: const TextStyle(
+                    color: GlassTheme.danger, fontSize: 11)),
+>>>>>>> Stashed changes
         ],
       ),
     );
@@ -384,8 +733,19 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+<<<<<<< Updated upstream
           Text(label, style: const TextStyle(fontSize: 11, color: GlassTheme.textSecondary)),
           Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: GlassTheme.textPrimary)),
+=======
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: GlassTheme.textSecondary)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: GlassTheme.textPrimary)),
+>>>>>>> Stashed changes
         ],
       ),
     );
@@ -400,11 +760,30 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+<<<<<<< Updated upstream
             Icon(Icons.compare_arrows, size: 80, color: Colors.purpleAccent.withOpacity(0.3)),
             const SizedBox(height: 24),
             Text("No Routes to Compare", style: Theme.of(context).textTheme.titleLarge?.copyWith(color: GlassTheme.textSecondary)),
             const SizedBox(height: 12),
             Text("Go to the Supply Routes tab, add suppliers and a buyer,\nthen click 'Find All Supply Routes' to see comparisons here.", textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+=======
+            Icon(Icons.compare_arrows,
+                size: 80, color: Colors.purpleAccent.withOpacity(0.3)),
+            const SizedBox(height: 24),
+            Text(
+              "No Routes to Compare",
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: GlassTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Go to the Supply Routes tab, add suppliers and a buyer,\nthen click 'Find All Supply Routes' to see comparisons here.",
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+>>>>>>> Stashed changes
           ],
         ),
       ),
