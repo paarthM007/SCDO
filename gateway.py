@@ -189,6 +189,69 @@ def api_report():
     except Exception as e:
         return _err(str(e), 500)
 
+@app.route("/api/feedback", methods=["POST"])
+def api_feedback():
+    """Save community risk ratings for cities. Body: { ratings: { "CityName": 7, ... }, job_id?: "..." }
+    One rating per user per city — subsequent submissions update the existing rating."""
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+
+    data = request.json or {}
+    ratings = data.get("ratings", {})
+    job_id = data.get("job_id")
+
+    if not ratings or not isinstance(ratings, dict):
+        return _err("Provide 'ratings' dict, e.g. {\"Mumbai\": 7, \"Delhi\": 3}")
+
+    db = get_db()
+    saved = 0
+    updated = 0
+    for city, score in ratings.items():
+        try:
+            score = int(score)
+            if score < 1 or score > 10:
+                continue
+            city_lower = city.strip().lower()
+
+            # Check if this user already rated this city — upsert
+            existing = (
+                db.collection("community_risk_reports")
+                  .where("user_id", "==", uid)
+                  .where("city", "==", city_lower)
+                  .limit(1)
+                  .stream()
+            )
+            existing_doc = next(existing, None)
+
+            if existing_doc:
+                # Update existing rating
+                existing_doc.reference.update({
+                    "risk_rating": score,
+                    "job_id": job_id,
+                    "updated_at": datetime.now(timezone.utc),
+                })
+                updated += 1
+            else:
+                # Create new rating
+                db.collection("community_risk_reports").add({
+                    "city": city_lower,
+                    "city_display": city.strip(),
+                    "risk_rating": score,
+                    "user_id": uid,
+                    "job_id": job_id,
+                    "created_at": datetime.now(timezone.utc),
+                })
+                saved += 1
+        except Exception as e:
+            logger.warning(f"Failed to save rating for {city}: {e}")
+
+    return jsonify({
+        "status": "ok",
+        "new": saved,
+        "updated": updated,
+        "message": f"{saved} new + {updated} updated rating(s). Thank you!"
+    })
+
 @app.route("/api/cities", methods=["GET"])
 def api_cities():
     q = request.args.get("q", "")

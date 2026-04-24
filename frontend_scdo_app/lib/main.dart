@@ -294,6 +294,110 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
     }
   }
 
+  // ── Feedback dialog for community risk reporting ────────────
+  void _showFeedbackDialog(Map<String, dynamic> job) {
+    List<String> cities = List<String>.from(job['cities'] ?? []);
+    if (cities.isEmpty) return;
+
+    // Initialize ratings map: city -> slider value (default 5)
+    Map<String, double> ratings = { for (var c in cities) c: 5.0 };
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.grey[900],
+              title: Row(children: [
+                Icon(Icons.feedback, color: Colors.amberAccent),
+                SizedBox(width: 8),
+                Text("Rate City Risks", style: TextStyle(color: Colors.amberAccent)),
+              ]),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text("How risky did each city feel on this route?\n(1 = Safe, 10 = Very Risky)",
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                          textAlign: TextAlign.center),
+                      SizedBox(height: 16),
+                      ...cities.map((city) {
+                        return Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              SizedBox(width: 90, child: Text(city,
+                                  style: TextStyle(color: Colors.white, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis)),
+                              Expanded(
+                                child: Slider(
+                                  value: ratings[city]!,
+                                  min: 1, max: 10, divisions: 9,
+                                  activeColor: Colors.amberAccent,
+                                  label: ratings[city]!.round().toString(),
+                                  onChanged: (v) => setDialogState(() => ratings[city] = v),
+                                ),
+                              ),
+                              SizedBox(width: 30,
+                                child: Text(ratings[city]!.round().toString(),
+                                    style: TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold))),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text("Cancel", style: TextStyle(color: Colors.white54)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amberAccent,
+                    foregroundColor: Colors.black,
+                  ),
+                  icon: Icon(Icons.send, size: 18),
+                  label: Text("Submit"),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _submitFeedback(ratings, job['job_id']);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitFeedback(Map<String, double> ratings, String? jobId) async {
+    Map<String, int> intRatings = ratings.map((k, v) => MapEntry(k, v.round()));
+    setState(() { rawJsonResponse = "Submitting feedback..."; });
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/feedback"),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "ratings": intRatings,
+          "job_id": jobId,
+        }),
+      );
+      var decoded = jsonDecode(response.body);
+      setState(() {
+        rawJsonResponse = JsonEncoder.withIndent('  ').convert(decoded);
+      });
+    } catch (e) {
+      setState(() { rawJsonResponse = "Feedback Error: $e"; });
+    }
+  }
+
   // ── Build a route summary card ─────────────────────────────
   Widget _routeCard(String key, Map<String, dynamic>? pathData) {
     if (pathData == null || pathData.containsKey("error")) {
@@ -474,12 +578,24 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
                   itemCount: history.length,
                   itemBuilder: (context, i) {
                     var job = history[i];
+                    bool isCompleted = job['status'] == 'completed';
                     return ListTile(
                       title: Text("${job['cities']?.join(' → ') ?? 'Route'}"),
                       subtitle: Text("Status: ${job['status']} | ${job['created_at']}"),
-                      trailing: Icon(
-                        job['status'] == 'completed' ? Icons.check_circle : Icons.hourglass_empty,
-                        color: job['status'] == 'completed' ? Colors.green : Colors.orange,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isCompleted)
+                            IconButton(
+                              icon: Icon(Icons.rate_review, color: Colors.amberAccent, size: 20),
+                              tooltip: "Rate city risks",
+                              onPressed: () => _showFeedbackDialog(job),
+                            ),
+                          Icon(
+                            isCompleted ? Icons.check_circle : Icons.hourglass_empty,
+                            color: isCompleted ? Colors.green : Colors.orange,
+                          ),
+                        ],
                       ),
                       onTap: () {
                         setState(() {

@@ -179,6 +179,7 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
             "recommendation": risk_result.get("recommendation", ""),
             "weather_risk": risk_result.get("weather_risk", {}),
             "sentiment_risk": risk_result.get("sentiment_risk", {}),
+            "community_risk": risk_result.get("community_risk", {}),
         },
         "simulation_stats": sim_stats,
     })
