@@ -19,17 +19,8 @@ class AppScaffold extends StatefulWidget {
 class _AppScaffoldState extends State<AppScaffold> {
   int _selectedIndex = 0;
 
-<<<<<<< Updated upstream
   final GlobalKey<RouteComparisonScreenState> _comparisonKey = GlobalKey();
-=======
-  // GlobalKey to push data into RouteComparisonScreen
-  final GlobalKey<RouteComparisonScreenState> _comparisonKey = GlobalKey();
-
-  // Route data shared between Supply Routes → Route Comparison
->>>>>>> Stashed changes
   Map<String, dynamic>? _multiSupplierData;
-
-  late final List<Widget> _screens;
 
   final List<String> _titles = [
     'Simulation Dashboard',
@@ -41,25 +32,18 @@ class _AppScaffoldState extends State<AppScaffold> {
     'My Profile',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _screens = [
+  List<Widget> get _screens {
+    return [
       const DashboardScreen(),
       const AltRouteScreen(),
       SupplyRoutesScreen(
         onResultsReady: (data) {
           setState(() {
             _multiSupplierData = data;
+            _selectedIndex = 3; // Auto-switch to comparison tab
           });
-<<<<<<< Updated upstream
+          // Also try updating via key if it's already mounted
           _comparisonKey.currentState?.updateData(data);
-=======
-          // Push data to comparison screen via GlobalKey
-          _comparisonKey.currentState?.updateData(data);
-          // Auto-switch to comparison tab
->>>>>>> Stashed changes
-          _onItemTapped(3);
         },
       ),
       RouteComparisonScreen(
@@ -70,6 +54,11 @@ class _AppScaffoldState extends State<AppScaffold> {
       const SearchProfilesScreen(),
       const ProfileScreen(),
     ];
+  }
+
+  @override
+  void initState() {
+    super.initState();
   }
 
   void _onItemTapped(int index) {
