@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
+import 'app_config.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/screens/app_scaffold.dart';
 
@@ -124,9 +125,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ElevatedButton(onPressed: _signIn, child: Text("Sign In")),
                 ElevatedButton(onPressed: _signUp, child: Text("Sign Up")),
               ],
-<<<<<<< HEAD
-            )
-=======
             ),
             SizedBox(height: 30),
             Divider(color: Colors.grey),
@@ -151,7 +149,6 @@ class _LoginScreenState extends State<LoginScreen> {
             //     onPressed: _signInWithGitHub,
             //   ),
             // ),
->>>>>>> cf3068d9f12f8e15fdb382e8bb5e8ae8d755597c
           ],
         ),
       ),
@@ -167,8 +164,8 @@ class SCDOHome extends StatefulWidget {
 class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  final String baseUrl = "http://localhost:7860";
-  final String apiKey = "scdo-dev-key-change-me";
+  final String baseUrl = AppConfig.gatewayBaseUrl;
+  final String apiKey = AppConfig.gatewayApiKey;
 
   String rawJsonResponse = "Output will appear here...";
   List<dynamic> history = [];
