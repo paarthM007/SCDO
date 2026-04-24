@@ -76,6 +76,12 @@ def compute_analytics(limit=200, user_id=None):
 
     for doc in docs:
         d = doc.to_dict()
+        
+        # Soft Delete: Skip if the record has expired
+        expires_at = d.get("expires_at")
+        if expires_at and expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            continue
+
         total_jobs += 1
 
         # Count routes

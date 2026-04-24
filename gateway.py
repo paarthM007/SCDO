@@ -1,31 +1,45 @@
 import os
+import io
+import time
 import logging
 import threading
 from datetime import datetime, timezone, timedelta
+from collections import defaultdict
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import io
+from firebase_admin import auth
 
-from scdo.config import GATEWAY_API_KEY, PORT, FIRESTORE_COLLECTION
+from scdo.config import GATEWAY_API_KEY, PORT, FIRESTORE_COLLECTION, DEFAULT_MC_ITERATIONS
 from scdo.db import get_db
 from scdo.routing.router import (
     find_route, find_alternate_route, list_cities, get_graph, extract_simulation_params
 )
 from scdo.simulation.monte_carlo import run_simulation_with_risk, monte_carlo_des
+from scdo.analytics import get_job_history, compute_analytics
+from scdo.reports import generate_report_pdf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("gateway")
 
-app = Flask(__name__)
-CORS(app)
-
-from firebase_admin import auth
-from collections import defaultdict
-import time
-
 user_requests = defaultdict(list)
 RATE_LIMIT_WINDOW = 60 # seconds
 RATE_LIMIT_MAX = 5 # requests per window
+
+app = Flask(__name__)
+CORS(app)
+
+def _start_worker_thread():
+    try:
+        from worker import start_listener
+        t = threading.Thread(target=start_listener, daemon=True)
+        t.start()
+        logger.info("Background worker started")
+    except Exception as e:
+        logger.warning(f"Worker failed to start: {e}")
+
+# Start worker immediately on load
+_start_worker_thread()
 
 def _get_user():
     # Priority 1: Check for Firebase JWT (Real Users)
@@ -96,7 +110,6 @@ def api_simulate():
     modes = data.get("modes")
     if not cities or not modes: return _err("Provide 'cities' and 'modes'")
     
-    from scdo.config import DEFAULT_MC_ITERATIONS
     n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
 
     try:
@@ -162,7 +175,6 @@ def api_simulate_path():
     if not cities or not modes:
         return _err("Could not extract simulation params from route")
 
-    from scdo.config import DEFAULT_MC_ITERATIONS
     n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
 
     try:
@@ -193,8 +205,6 @@ def api_simulate_path():
 def api_history():
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
-    
-    from scdo.analytics import get_job_history, compute_analytics
     mode = request.args.get("mode", "list")
     if mode == "analytics":
         return jsonify({"status": "ok", "analytics": compute_analytics(user_id=uid)})
@@ -229,7 +239,6 @@ def api_report():
     if not uid: return _err("Unauthorized", 401)
     data = request.json or {}
     try:
-        from scdo.reports import generate_report_pdf
         pdf_bytes = generate_report_pdf(data)
         return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", download_name="report.pdf")
     except Exception as e:
@@ -305,16 +314,6 @@ def api_cities():
     q = request.args.get("q", "")
     return jsonify({"cities": list_cities(q)})
 
-def _start_worker_thread():
-    try:
-        from worker import start_listener
-        t = threading.Thread(target=start_listener, daemon=True)
-        t.start()
-        logger.info("Background worker started")
-    except Exception as e:
-        logger.warning(f"Worker failed to start: {e}")
-
 if __name__ == "__main__":
     get_graph()
-    _start_worker_thread()
     app.run(host="0.0.0.0", port=PORT)
