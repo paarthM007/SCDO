@@ -1,7 +1,7 @@
 import os
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import io
@@ -28,22 +28,29 @@ RATE_LIMIT_WINDOW = 60 # seconds
 RATE_LIMIT_MAX = 5 # requests per window
 
 def _get_user():
-    # Priority 1: Check for X-API-Key (useful for local dev/bypassing complex auth)
-    if request.headers.get("X-API-Key", "") == GATEWAY_API_KEY:
-        return "dev_admin_user"
-
-    # Priority 2: Check for Firebase JWT
+    # Priority 1: Check for Firebase JWT (Real Users)
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return None
-        
-    token = auth_header.split("Bearer ")[1]
-    try:
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token.get("uid")
-    except Exception as e:
-        logger.warning(f"Auth failed: {e}")
-        return None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split("Bearer ")[1]
+        try:
+            decoded_token = auth.verify_id_token(token)
+            uid = decoded_token.get("uid")
+            
+            # Track user activity for auto-deletion
+            if uid:
+                db = get_db()
+                db.collection("users").document(uid).set({
+                    "last_active": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(timezone.utc) + timedelta(days=30),
+                    "email": decoded_token.get("email")
+                }, merge=True)
+            
+            return uid
+        except Exception as e:
+            logger.warning(f"Firebase Token Auth failed: {e}")
+            # Fall through to check API Key
+
+    return None
 
 def _check_rate_limit(uid):
     now = time.time()
@@ -255,6 +262,7 @@ def api_feedback():
                     "risk_rating": score,
                     "job_id": job_id,
                     "updated_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(timezone.utc) + timedelta(hours=72),
                 })
                 updated += 1
             else:
@@ -266,6 +274,7 @@ def api_feedback():
                     "user_id": uid,
                     "job_id": job_id,
                     "created_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(timezone.utc) + timedelta(hours=72),
                 })
                 saved += 1
         except Exception as e:
