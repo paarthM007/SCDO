@@ -83,14 +83,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _signInWithGitHub() async {
-    try {
-      GithubAuthProvider githubProvider = GithubAuthProvider();
-      await FirebaseAuth.instance.signInWithProvider(githubProvider);
-    } catch (e) {
-      setState(() => _error = "GitHub Sign-In Error: $e");
-    }
-  }
+  // Future<void> _signInWithGitHub() async {
+  //   try {
+  //     GithubAuthProvider githubProvider = GithubAuthProvider();
+  //     await FirebaseAuth.instance.signInWithProvider(githubProvider);
+  //   } catch (e) {
+  //     setState(() => _error = "GitHub Sign-In Error: $e");
+  //   }
+  // }
 
   // ──────────────────────────────────────────────────────────────
 
@@ -131,16 +131,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _signInWithGoogle,
               ),
             ),
-            SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.black38, foregroundColor: Colors.white),
-                icon: Icon(Icons.code), // generic icon for Github
-                label: Text("Sign in with GitHub"),
-                onPressed: _signInWithGitHub,
-              ),
-            ),
+            // SizedBox(height: 10),
+            // SizedBox(
+            //   width: double.infinity,
+            //   child: ElevatedButton.icon(
+            //     style: ElevatedButton.styleFrom(backgroundColor: Colors.black38, foregroundColor: Colors.white),
+            //     icon: Icon(Icons.code), // generic icon for Github
+            //     label: Text("Sign in with GitHub"),
+            //     onPressed: _signInWithGitHub,
+            //   ),
+            // ),
           ],
         ),
       ),
