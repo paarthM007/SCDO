@@ -169,13 +169,15 @@ def find_route(origin, destination, mode_pref="BEST",
                objective="FASTEST", blocked_nodes=None,
                # ── v3.0 CTR shipment parameters ──
                quantity=None, product_type=None, risk_score=0.0,
-               omega=None, max_budget=None, deadline_h=None):
+               omega=None, max_budget=None, deadline_h=None,
+               cargo_type="STANDARD"):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.
     
     v3.0: When quantity/product_type are provided, uses CTR Tensor
     dynamic edge weighting with cargo-aware constraint pruning.
+    Phase 2: Uses cargo_type for Dynamic Cargo Weighting (Multi-Objective).
     """
     graph = get_graph()
     src_id = find_node_id(graph, origin)
@@ -186,20 +188,26 @@ def find_route(origin, destination, mode_pref="BEST",
     allowed = MODE_SETS.get(mode_pref.upper(), {"HIGHWAY", "SEA", "AIR"})
 
     # Resolve blocked node names to IDs
+    from scdo.simulation.crisis_manager import CrisisManager
+    cm = CrisisManager()
+    
+    all_blocked_names = set(blocked_nodes or [])
+    all_blocked_names.update(cm.banned_nodes)
+
     blocked_ids = set()
-    if blocked_nodes:
-        for bn in blocked_nodes:
-            bid = find_node_id(graph, bn)
-            if bid:
-                blocked_ids.add(bid)
-            else:
-                logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
+    for bn in all_blocked_names:
+        bid = find_node_id(graph, bn)
+        if bid:
+            blocked_ids.add(bid)
+        else:
+            logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
 
     try:
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
             quantity=quantity, product_type=product_type,
             risk_score=risk_score, omega=omega, max_budget=max_budget,
+            cargo_type=cargo_type
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -242,8 +250,16 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "pharmaceuticals": "AIR", "bulk_commodity": "SEA", "hazmat": "LAND_SEA",
         "vehicles": "SEA", "general": "BEST", "electronics": "BEST",
     }
+    
+    PHASE2_MAP = {
+        "frozen_food": "PERISHABLE", "perishable": "PERISHABLE", "live_animals": "PERISHABLE",
+        "pharmaceuticals": "PERISHABLE", "bulk_commodity": "BULK", "hazmat": "STANDARD",
+        "vehicles": "STANDARD", "general": "STANDARD", "electronics": "HIGH_VALUE",
+    }
+    
     effective_mode = mode_pref or CARGO_MODE_MAP.get(cargo_type, "BEST")
     effective_product = product_type or cargo_type
+    phase_2_cargo = PHASE2_MAP.get(cargo_type, "STANDARD")
 
     results = {}
     
@@ -256,6 +272,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
         origin, destination, effective_mode, "FASTEST", blocked_nodes,
         quantity=quantity, product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
     )
     results["fastest"] = r_fast
 
@@ -264,6 +281,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
         origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
         quantity=quantity, product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
     )
     
     # Diversify Cheapest if duplicate
@@ -277,6 +295,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
                 origin, destination, effective_mode, "CHEAPEST", temp_blocked,
                 quantity=quantity, product_type=effective_product,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+                cargo_type=phase_2_cargo
             )
             if "error" not in alt_cheap:
                 r_cheap = alt_cheap
@@ -287,6 +306,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
         origin, destination, effective_mode, "BALANCED", blocked_nodes,
         quantity=quantity, product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
     )
     
     # Diversify Balanced if duplicate
@@ -300,6 +320,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
                 origin, destination, effective_mode, "BALANCED", temp_blocked,
                 quantity=quantity, product_type=effective_product,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+                cargo_type=phase_2_cargo
             )
             if "error" not in alt_bal and not _is_duplicate(alt_bal, r_cheap):
                 r_bal = alt_bal

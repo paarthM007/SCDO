@@ -10,6 +10,13 @@ class Node:
     def __init__(self, env, name):
         self.env = env
         self.name = name
+        
+        # Consult CrisisManager for active risk multipliers
+        from scdo.simulation.crisis_manager import CrisisManager
+        cm = CrisisManager()
+        if self.name in cm.active_risk_multipliers:
+            self._risk_delay_multiplier = cm.active_risk_multipliers[self.name]
+
     def _scale_delay(self, delay):
         return delay * getattr(self, '_risk_delay_multiplier', 1.0)
     def _scale_cost(self, cost):
