@@ -36,14 +36,25 @@
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDqN1Pb0omGORGFKo-BtMrjIug5QjUN2Ig"></script>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    // Initialize Firebase in JS for better Auth stability on Web
+    const firebaseConfig = {
+      apiKey: "AIzaSyB05_lmT9_WXhy55hZe8u4OeHq1PymQqtc",
+      authDomain: "scdodeployment-32cba.firebaseapp.com",
+      projectId: "scdodeployment-32cba",
+      storageBucket: "scdodeployment-32cba.firebasestorage.app",
+      messagingSenderId: "415414693981",
+      appId: "1:415414693981:web:ca3e258ea700133a881db4",
+      measurementId: "G-7DZZZSZW98"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

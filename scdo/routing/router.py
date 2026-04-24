@@ -81,9 +81,7 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
 
     result = {
         "origin": src_node["name"], "origin_id": src_id,
-        "origin_coords": {"lat": src_node["lat"], "lon": src_node["lon"]},
         "destination": dst_node["name"], "destination_id": dst_id,
-        "dest_coords": {"lat": dst_node["lat"], "lon": dst_node["lon"]},
         "objective": objective, "mode_preference": mode_pref,
         "total_distance_km": round(total_km, 1),
         "total_time_h": round(total_h, 2),
@@ -350,6 +348,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     }
 
 
+
 def extract_simulation_params(route_result):
     """
     Extracts 'cities' and 'modes' lists from a find_route/find_alternate_route result
@@ -376,7 +375,7 @@ def extract_simulation_params(route_result):
         cities.append(edge["to"])
         modes.append(MODE_MAP.get(edge["mode"], "road"))
     
-    return cities, modes
+    return cities, modes, edges
 
 
 def list_cities(query=None, country=None):
