@@ -1,9 +1,6 @@
-import os
 import time
-import json
 import logging
 from google.cloud import firestore
-from google.oauth2 import service_account
 from scdo.db import get_db
 from scdo.config import FIRESTORE_COLLECTION
 from scdo.simulation.monte_carlo import run_simulation_with_risk

@@ -16,8 +16,10 @@ MAX_CROSS_BORDER_KM = 120
 MAX_SEA_KM = 8000
 MAX_AIR_KM = 12000
 
-COST_PER_KM = {"HIGHWAY": 0.08, "SEA": 0.007, "AIR": 0.45}
-MODE_FIXED_COST = {"HIGHWAY": 0, "SEA": 120, "AIR": 80}
+# Realistic freight cost per km (USD) for commercial cargo
+COST_PER_KM = {"HIGHWAY": 0.18, "SEA": 0.035, "AIR": 0.45}
+# Fixed costs per leg: port handling, airport fees, tolls, etc.
+MODE_FIXED_COST = {"HIGHWAY": 25, "SEA": 350, "AIR": 150}
 
 OCEAN_ZONES = {
     "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia"],
@@ -65,7 +67,9 @@ def travel_time_h(dist_km, mode):
     return dist_km / 50
 
 def travel_cost_usd(dist_km, mode):
-    return dist_km * COST_PER_KM.get(mode, 0.08)
+    per_km = dist_km * COST_PER_KM.get(mode, 0.18)
+    fixed = MODE_FIXED_COST.get(mode, 0)
+    return per_km + fixed
 
 
 class GlobalRoutingGraph:

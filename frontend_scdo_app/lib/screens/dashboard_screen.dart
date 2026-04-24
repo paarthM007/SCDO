@@ -40,7 +40,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Uri.parse("$baseUrl/api/simulate"),
         headers: {
           "Authorization": "Bearer $token",
-          "X-API-Key": apiKey,
           "Content-Type": "application/json"
         },
         body: jsonEncode(body),

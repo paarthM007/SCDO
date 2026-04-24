@@ -33,7 +33,6 @@ class _AltRouteScreenState extends State<AltRouteScreen> {
     String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
     return {
       "Authorization": "Bearer $token",
-      "X-API-Key": apiKey,
       "Content-Type": "application/json",
     };
   }

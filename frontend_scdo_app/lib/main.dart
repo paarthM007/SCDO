@@ -200,7 +200,6 @@ class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin
     String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
     return {
       "Authorization": "Bearer $token",
-      "X-API-Key": apiKey,
       "Content-Type": "application/json",
     };
   }
