@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/delivery_zone_selector.dart';
+// Inside your build method:
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,6 +22,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isPublic = false;
   bool _isLoading = true;
   bool _isSaving = false;
+  
+  List<String> _selectedDeliveryZones = [];
 
   @override
   void initState() {
@@ -46,6 +50,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _productsController.text = products.join(', ');
           } else if (products is String) {
             _productsController.text = products;
+          }
+          
+          final dZones = data['delivery_zones'];
+          if (dZones is List) {
+            _selectedDeliveryZones = List<String>.from(dZones);
           }
         });
       }
@@ -77,6 +86,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'min_quantity': int.tryParse(_minQtyController.text.trim()) ?? 0,
         'location_data': _locationController.text.trim(),
         'products_offered': productsList,
+        'delivery_zones': _selectedDeliveryZones,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
@@ -106,6 +116,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const Center(child: CircularProgressIndicator(color: GlassTheme.accentNeonGreen));
     }
 
+
+
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
@@ -125,6 +137,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'Manage your supply chain details. Make it public to connect with others.',
                 style: Theme.of(context).textTheme.bodyMedium,
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              DeliveryZoneSelector(
+                data: mockDeliveryData,
+                initialSelection: _selectedDeliveryZones,
+                onSelectionChanged: (List<String> selectedCityIds) {
+                  _selectedDeliveryZones = selectedCityIds;
+                },
               ),
               const SizedBox(height: 32),
               GlassContainer(
