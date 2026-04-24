@@ -42,6 +42,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.dispose();
   }
 
+  Future<Map<String, String>> _authHeaders() async {
+    String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      "Authorization": "Bearer $token",
+      "X-API-Key": apiKey,
+      "Content-Type": "application/json",
+    };
+  }
+
   Future<void> _fetchHistory({bool showLoading = true}) async {
     if (showLoading) {
       setState(() {
@@ -50,13 +59,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       });
     }
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.get(
         Uri.parse("$baseUrl/api/history"),
-        headers: {
-          "Authorization": "Bearer $token",
-          "X-API-Key": apiKey,
-        },
+        headers: await _authHeaders(),
       );
       if (response.statusCode == 200) {
         var decoded = jsonDecode(response.body);
@@ -105,13 +110,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (confirm != true) return;
 
     try {
-      String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
       final response = await http.post(
         Uri.parse("$baseUrl/api/history/$jobId"),
-        headers: {
-          "Authorization": "Bearer $token",
-          "X-API-Key": apiKey,
-        },
+        headers: await _authHeaders(),
       );
 
       if (response.statusCode == 200) {
@@ -130,6 +131,135 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Network error: $e'), backgroundColor: GlassTheme.danger),
       );
+    }
+  }
+
+  // ── Feedback dialog for community risk reporting ────────────
+  void _showFeedbackDialog(Map<String, dynamic> job) {
+    List<String> cities = List<String>.from(job['cities'] ?? []);
+    if (cities.isEmpty) return;
+
+    Map<String, double> ratings = { for (var c in cities) c: 5.0 };
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: GlassTheme.backgroundCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(children: [
+                Icon(Icons.feedback, color: Colors.amberAccent),
+                const SizedBox(width: 10),
+                Text("Rate City Risks", style: TextStyle(color: Colors.amberAccent)),
+              ]),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "How risky did each city feel on this route?\n(1 = Safe, 10 = Very Risky)",
+                        style: TextStyle(color: GlassTheme.textSecondary, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ...cities.map((city) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 100,
+                                child: Text(city,
+                                    style: const TextStyle(color: GlassTheme.textPrimary, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: SliderTheme.of(ctx).copyWith(
+                                    activeTrackColor: Colors.amberAccent,
+                                    inactiveTrackColor: Colors.amberAccent.withOpacity(0.2),
+                                    thumbColor: Colors.amberAccent,
+                                    overlayColor: Colors.amberAccent.withOpacity(0.1),
+                                  ),
+                                  child: Slider(
+                                    value: ratings[city]!,
+                                    min: 1, max: 10, divisions: 9,
+                                    label: ratings[city]!.round().toString(),
+                                    onChanged: (v) => setDialogState(() => ratings[city] = v),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 30,
+                                child: Text(
+                                  ratings[city]!.round().toString(),
+                                  style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 15),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Cancel", style: TextStyle(color: GlassTheme.textSecondary)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amberAccent,
+                    foregroundColor: GlassTheme.backgroundDark,
+                  ),
+                  icon: const Icon(Icons.send, size: 18),
+                  label: const Text("Submit"),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _submitFeedback(ratings, job['job_id']);
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitFeedback(Map<String, double> ratings, String? jobId) async {
+    Map<String, int> intRatings = ratings.map((k, v) => MapEntry(k, v.round()));
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/feedback"),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          "ratings": intRatings,
+          "job_id": jobId,
+        }),
+      );
+      var decoded = jsonDecode(response.body);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✅ ${decoded['message'] ?? 'Feedback submitted!'}"),
+            backgroundColor: GlassTheme.accentNeonGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Feedback error: $e'), backgroundColor: GlassTheme.danger),
+        );
+      }
     }
   }
 
@@ -169,6 +299,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               final job = _history[index];
                               final status = job['status'] ?? 'unknown';
                               final isCompleted = status == 'completed';
+                              final cities = job['cities'] as List?;
                               
                               return GlassContainer(
                                 padding: const EdgeInsets.all(16),
@@ -188,7 +319,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            "Job ID: ${job['job_id']}",
+                                            cities != null ? cities.join(' → ') : "Job ID: ${job['job_id']}",
                                             style: const TextStyle(fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 4),
@@ -202,6 +333,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         ],
                                       ),
                                     ),
+                                    // ── Rate Risk button (completed jobs only) ──
+                                    if (isCompleted)
+                                      IconButton(
+                                        icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
+                                        tooltip: "Rate city risks",
+                                        onPressed: () => _showFeedbackDialog(job),
+                                      ),
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
                                       onPressed: () => _deleteJob(job['job_id']),
