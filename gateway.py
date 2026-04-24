@@ -28,12 +28,15 @@ RATE_LIMIT_WINDOW = 60 # seconds
 RATE_LIMIT_MAX = 5 # requests per window
 
 def _get_user():
+    # Priority 1: Check for X-API-Key (useful for local dev/bypassing complex auth)
+    if request.headers.get("X-API-Key", "") == GATEWAY_API_KEY:
+        return "dev_admin_user"
+
+    # Priority 2: Check for Firebase JWT
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        # Fallback to dev api key for easy local testing if needed, though JWT is preferred
-        if request.headers.get("X-API-Key", "") == GATEWAY_API_KEY:
-            return "dev_admin_user"
         return None
+        
     token = auth_header.split("Bearer ")[1]
     try:
         decoded_token = auth.verify_id_token(token)
@@ -150,6 +153,29 @@ def api_history():
     if mode == "analytics":
         return jsonify({"status": "ok", "analytics": compute_analytics(user_id=uid)})
     return jsonify({"status": "ok", "jobs": get_job_history(user_id=uid)})
+
+@app.route("/api/history/<job_id>", methods=["DELETE"])
+def api_delete_history(job_id):
+    uid = _get_user()
+    if not uid: return _err("Unauthorized", 401)
+    
+    try:
+        db = get_db()
+        doc_ref = db.collection(FIRESTORE_COLLECTION).document(job_id)
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            return _err("Job not found", 404)
+            
+        doc_data = doc.to_dict()
+        if doc_data.get("user_id") != uid:
+            return _err("Forbidden", 403)
+            
+        doc_ref.delete()
+        return jsonify({"status": "ok", "message": f"Job {job_id} deleted successfully"})
+    except Exception as e:
+        logger.error(f"Failed to delete job {job_id}: {e}")
+        return _err(str(e), 500)
 
 @app.route("/api/report", methods=["POST"])
 def api_report():

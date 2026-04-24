@@ -3,42 +3,52 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart'; // Ensure you have this file generated
+import 'firebase_options.dart';
+import 'package:scdo_app/theme/glass_theme.dart';
+import 'package:scdo_app/screens/app_scaffold.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(SCDOTesterApp());
+  runApp(const SCDOTesterApp());
 }
 
 class SCDOTesterApp extends StatelessWidget {
+  const SCDOTesterApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData.dark(),
-      home: AuthWrapper(),
+      title: 'SCDO Dashboard',
+      theme: GlassTheme.darkTheme,
+      home: const AuthWrapper(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          return SCDOHome();
+          return const AppScaffold();
         }
-        return LoginScreen();
+        return const LoginScreen();
       },
     );
   }
 }
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -105,7 +115,7 @@ class SCDOHome extends StatefulWidget {
 class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  final String baseUrl = "https://paarthm007-scdo-api.hf.space";
+  final String baseUrl = "http://localhost:7860";
   final String apiKey = "scdo-dev-key-change-me";
 
   String rawJsonResponse = "Output will appear here...";

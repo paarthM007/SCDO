@@ -26,27 +26,20 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // ── WEB ────────────────────────────────────────────────────
-
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_WEB_API_KEY',
-    appId: 'YOUR_WEB_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    authDomain: 'YOUR_AUTH_DOMAIN',
-    storageBucket: 'YOUR_STORAGE_BUCKET',
-    measurementId: 'YOUR_MEASUREMENT_ID',
+    apiKey: 'AIzaSyB05_lmT9_WXhy55hZe8u4OeHq1PymQqtc',
+    appId: '1:415414693981:web:ca3e258ea700133a881db4', // Updated with actual Web App ID
+    messagingSenderId: '415414693981',
+    projectId: 'scdodeployment-32cba',
+    authDomain: 'scdodeployment-32cba.firebaseapp.com',
+    storageBucket: 'scdodeployment-32cba.firebasestorage.app',
   );
-
-  // ── ANDROID ────────────────────────────────────────────────
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_STORAGE_BUCKET',
+    apiKey: 'AIzaSyB05_lmT9_WXhy55hZe8u4OeHq1PymQqtc',
+    appId: '1:415414693981:android:41245f8560c8ec55881db4',
+    messagingSenderId: '415414693981',
+    projectId: 'scdodeployment-32cba',
+    storageBucket: 'scdodeployment-32cba.firebasestorage.app',
   );
-
-  // Replace with your Firebase Android config
-}
+}
