@@ -3,43 +3,52 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'firebase_options.dart'; // Ensure you have this file generated
-// import 'package:google_sign_in/google_sign_in.dart';
+import 'firebase_options.dart';
+import 'package:scdo_app/theme/glass_theme.dart';
+import 'package:scdo_app/screens/app_scaffold.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(SCDOTesterApp());
+  runApp(const SCDOTesterApp());
 }
 
 class SCDOTesterApp extends StatelessWidget {
+  const SCDOTesterApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData.dark(),
-      home: AuthWrapper(),
+      title: 'SCDO Dashboard',
+      theme: GlassTheme.darkTheme,
+      home: const AuthWrapper(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
 class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.hasData) {
-          return SCDOHome();
+          return const AppScaffold();
         }
-        return LoginScreen();
+        return const LoginScreen();
       },
     );
   }
 }
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -71,29 +80,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ─── NEW OAUTH LOGIC ──────────────────────────────────────────
-
- Future<void> _signInWithGoogle() async {
-    try {
-      // Use the built-in Firebase Web Provider instead of the buggy package
-      GoogleAuthProvider googleProvider = GoogleAuthProvider();
-      await FirebaseAuth.instance.signInWithPopup(googleProvider);
-    } catch (e) {
-      setState(() => _error = "Google Sign-In Error: $e");
-    }
-  }
-
-  Future<void> _signInWithGitHub() async {
-    try {
-      GithubAuthProvider githubProvider = GithubAuthProvider();
-      await FirebaseAuth.instance.signInWithProvider(githubProvider);
-    } catch (e) {
-      setState(() => _error = "GitHub Sign-In Error: $e");
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,11 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_error.isNotEmpty) 
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(_error, style: TextStyle(color: Colors.red), textAlign: TextAlign.center),
-              ),
+            if (_error.isNotEmpty) Text(_error, style: TextStyle(color: Colors.red)),
             TextField(controller: _email, decoration: InputDecoration(labelText: "Email")),
             TextField(controller: _password, decoration: InputDecoration(labelText: "Password"), obscureText: true),
             SizedBox(height: 20),
@@ -117,30 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ElevatedButton(onPressed: _signIn, child: Text("Sign In")),
                 ElevatedButton(onPressed: _signUp, child: Text("Sign Up")),
               ],
-            ),
-            SizedBox(height: 30),
-            Divider(color: Colors.grey),
-            SizedBox(height: 20),
-            // ─── NEW OAUTH BUTTONS ────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
-                icon: Icon(Icons.g_mobiledata, size: 30),
-                label: Text("Sign in with Google"),
-                onPressed: _signInWithGoogle,
-              ),
-            ),
-            SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.black38, foregroundColor: Colors.white),
-                icon: Icon(Icons.code), // generic icon for Github
-                label: Text("Sign in with GitHub"),
-                onPressed: _signInWithGitHub,
-              ),
-            ),
+            )
           ],
         ),
       ),
@@ -156,8 +115,7 @@ class SCDOHome extends StatefulWidget {
 class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  // final String baseUrl = "https://paarthm007-scdo-api.hf.space";
-  final String baseUrl = "http://127.0.0.1:7860";
+  final String baseUrl = "http://localhost:7860";
   final String apiKey = "scdo-dev-key-change-me";
 
   String rawJsonResponse = "Output will appear here...";
