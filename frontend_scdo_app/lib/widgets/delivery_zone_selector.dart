@@ -5,21 +5,21 @@ import 'package:google_fonts/google_fonts.dart';
 class ZoneCity {
   final String id;
   final String name;
-  ZoneCity({required this.id, required this.name});
+  const ZoneCity({required this.id, required this.name});
 }
 
 class ZoneState {
   final String id;
   final String name;
   final List<ZoneCity> cities;
-  ZoneState({required this.id, required this.name, required this.cities});
+  const ZoneState({required this.id, required this.name, required this.cities});
 }
 
 class ZoneCountry {
   final String id;
   final String name;
   final List<ZoneState> states;
-  ZoneCountry({required this.id, required this.name, required this.states});
+  const ZoneCountry({required this.id, required this.name, required this.states});
 }
 
 // --- Mock Data ---
