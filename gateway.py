@@ -39,9 +39,22 @@ def _get_user():
             # Track user activity for auto-deletion
             if uid:
                 db = get_db()
-                db.collection("users").document(uid).set({
-                    "last_active": datetime.now(timezone.utc),
-                    "expires_at": datetime.now(timezone.utc) + timedelta(days=30),
+                user_doc_ref = db.collection("users").document(uid)
+                user_doc = user_doc_ref.get()
+                
+                now = datetime.now(timezone.utc)
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    user_expires = user_data.get("expires_at")
+                    if user_expires and user_expires.replace(tzinfo=timezone.utc) < now:
+                        # Soft Delete: User has been inactive for > 30 days
+                        # We could delete their data here or just treat them as new
+                        logger.info(f"User {uid} expired. Re-initializing.")
+
+                # Refresh activity
+                user_doc_ref.set({
+                    "last_active": now,
+                    "expires_at": now + timedelta(days=30),
                     "email": decoded_token.get("email")
                 }, merge=True)
             

@@ -28,8 +28,17 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
 
     docs = query.stream()
     jobs = []
+    now = datetime.now(timezone.utc)
     for doc in docs:
         d = doc.to_dict()
+        
+        # Soft Delete: Skip if the record has expired
+        expires_at = d.get("expires_at")
+        if expires_at:
+            # Firestore timestamps are returned as datetime objects
+            if expires_at.replace(tzinfo=timezone.utc) < now:
+                continue
+
         d["job_id"] = doc.id
         # Strip heavy fields for listing
         if "result" in d and isinstance(d["result"], dict):
