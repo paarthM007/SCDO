@@ -383,8 +383,8 @@ class _AnimatedTruck extends StatelessWidget {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeInOut,
-      left: x - 16,
-      top: y - 16,
+      left: 100,
+      top: 100,
       child: Container(
         width: 32, height: 32,
         decoration: BoxDecoration(
