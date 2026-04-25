@@ -17,7 +17,6 @@ from scdo.routing.router import (
 )
 from scdo.simulation.monte_carlo import run_simulation_with_risk, monte_carlo_des
 from scdo.analytics import get_job_history, compute_analytics
-from scdo.reports import generate_report_pdf
 
 # --- Live Orchestrator Imports ---
 import uuid
@@ -313,16 +312,7 @@ def api_delete_history(job_id):
         logger.error(f"Failed to delete job {job_id}: {e}")
         return _err(str(e), 500)
 
-@app.route("/api/report", methods=["POST"])
-def api_report():
-    uid = _get_user()
-    if not uid: return _err("Unauthorized", 401)
-    data = request.json or {}
-    try:
-        pdf_bytes = generate_report_pdf(data)
-        return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", download_name="report.pdf")
-    except Exception as e:
-        return _err(str(e), 500)
+
 
 @app.route("/api/feedback", methods=["POST"])
 def api_feedback():

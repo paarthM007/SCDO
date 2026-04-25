@@ -135,40 +135,7 @@ class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateM
     }
   }
 
-  Future<void> _downloadReport(Map<String, dynamic> job) async {
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Generating report...'), duration: Duration(seconds: 1)),
-      );
 
-      final response = await http.post(
-        Uri.parse("$baseUrl/api/report"),
-        headers: await _authHeaders(),
-        body: jsonEncode(job),
-      );
-
-      if (response.statusCode == 200) {
-        final blob = html.Blob([response.bodyBytes], 'application/pdf');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", "scdo_report_${job['job_id']}.pdf")
-          ..click();
-        html.Url.revokeObjectUrl(url);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report downloaded successfully!'), backgroundColor: GlassTheme.accentNeonGreen),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Report failed: ${response.statusCode}'), backgroundColor: GlassTheme.danger),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Report error: $e'), backgroundColor: GlassTheme.danger),
-      );
-    }
-  }
 
   void _showFeedbackDialog(Map<String, dynamic> job) {
     List<String> cities = List<String>.from(job['cities'] ?? []);
@@ -381,12 +348,7 @@ class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateM
                                               ],
                                             ),
                                           ),
-                                          if (isCompleted) ...[
-                                            IconButton(
-                                              icon: const Icon(Icons.picture_as_pdf, color: GlassTheme.accentCyan, size: 22),
-                                              tooltip: "Download PDF Report",
-                                              onPressed: () => _downloadReport(job),
-                                            ),
+
                                             IconButton(
                                               icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
                                               tooltip: "Rate city risks",
