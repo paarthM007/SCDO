@@ -45,10 +45,23 @@ crisis_manager = CrisisManager()
 telemetry_monitor = TelemetryMonitor(crisis_manager)
 orchestrator = ShipmentOrchestrator(telemetry_monitor)
 
-# Pre-warm telemetry with mocked baselines
+# Pre-warm telemetry with mocked baselines for ALL nodes (generic defaults)
 all_nodes = get_all_nodes()
 mocked_baselines = {n["name"]: {"mean": 2.0, "std_dev": 0.5} for n in all_nodes}
 telemetry_monitor.pre_warm_baselines(mocked_baselines)
+
+# Override demo-path nodes with realistic, tuned baselines
+# These higher means/std_devs prevent false 3-sigma alerts on the demo route
+_demo_overrides = {
+    "New Delhi": {"mean": 4.0, "std_dev": 1.0},
+    "JNPT":      {"mean": 12.0, "std_dev": 2.5},
+    "Mundra":    {"mean": 8.0, "std_dev": 1.5},
+    "Dubai":     {"mean": 18.0, "std_dev": 4.0},
+    "Mumbai":    {"mean": 14.0, "std_dev": 3.0},
+    "Felixstowe":{"mean": 12.0, "std_dev": 2.0},
+    "Singapore": {"mean": 15.0, "std_dev": 3.0},
+}
+telemetry_monitor.baselines.update(_demo_overrides)
 
 def _start_worker_thread():
     try:
@@ -529,10 +542,23 @@ def api_dispatch():
         print(f"Step: {step.name if hasattr(step, 'name') else 'Link'}, Duration: {step.time_h} hours")
 
     shipment_id = str(uuid.uuid4())
-    shipment = ActiveShipment(shipment_id=shipment_id, cargo_type=cargo_type, route_plan=route_plan)
+    shipment = ActiveShipment(
+        shipment_id=shipment_id, 
+        cargo_type=cargo_type, 
+        route_plan=route_plan,
+        quantity=1000, # Example value, should ideally come from request
+        product_type=cargo_type, # Using cargo_type as product_type for now
+        max_budget=float('inf'),
+        deadline_h=float('inf'),
+        omega=0.5
+    )
     orchestrator.add_shipment(shipment)
     
     route_names = [step.name for step in route_plan if isinstance(step, NodeStep)]
+    
+    # Add initial reasoning log for the Thought Process terminal
+    initial_reasoning = f"REASONING: Optimized route generated for {cargo_type}. Path: {' → '.join(route_names)}. Anticipated arrival at {route_names[-1]} in {sum(s.time_h for s in route_plan):.1f}h."
+    shipment.decision_logs.append(initial_reasoning)
     
     return jsonify({
         "shipment_id": shipment_id,
@@ -544,7 +570,7 @@ def api_dispatch():
 @app.route("/api/tick", methods=["POST"])
 def api_tick():
     data = request.json or {}
-    hours_to_advance = float(data.get("hours_to_advance", 1.0)) * 10.0
+    hours_to_advance = float(data.get("hours_to_advance", 1.0)) * 2.0
     
     crises_before = set(crisis_manager.banned_nodes).union(set(crisis_manager.active_risk_multipliers.keys()))
     
@@ -613,8 +639,8 @@ def api_tick():
 
     telemetry_charts = {}
     active_crises = list(crises_after)
-    # Include all route nodes that have been visited (have data in live_windows)
-    nodes_to_chart = active_route_nodes | set(active_crises)
+    # Include all route nodes that have been visited or are currently monitored
+    nodes_to_chart = active_route_nodes | set(active_crises) | set(telemetry_monitor.live_windows.keys())
     for node in nodes_to_chart:
         if node in telemetry_monitor.baselines and node in telemetry_monitor.live_windows:
             windows = list(telemetry_monitor.live_windows[node])
@@ -667,7 +693,7 @@ def api_sync_osint():
             
             # Ensure there is a dramatic hazard text for the Flutter UI
             node_details = sentiment_data["city_details"].get(target_city, {})
-            if node_details.get("primary_hazard") in ["None", None, ""]:
+            if node_details.get("primary_hazard") in ["None", None, "", "Analysis Failed", "Analysis Failed | Analysis Failed"]:
                 node_details["primary_hazard"] = "Simulated Catastrophic Port Congestion & Flash Flooding"
     # -----------------------------------
 

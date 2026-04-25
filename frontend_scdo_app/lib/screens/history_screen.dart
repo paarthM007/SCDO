@@ -361,7 +361,8 @@ class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateM
                                                tooltip: 'Delete Job',
                                              ),
                                            ],
-                                        ),
+                                         ],
+                                       ),
                                       if (isCompleted && job['summary'] != null) ...[
                                         const Divider(color: Colors.white12, height: 24),
                                         _buildSummaryGrid(job['summary']),

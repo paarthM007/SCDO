@@ -168,7 +168,7 @@ def find_route(origin, destination, mode_pref="BEST",
                # ── v3.0 CTR shipment parameters ──
                product_type=None, risk_score=0.0,
                omega=None, max_budget=None, deadline_h=None,
-               cargo_type="STANDARD"):
+               cargo_type="STANDARD", quantity=None):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.

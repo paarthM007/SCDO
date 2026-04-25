@@ -91,6 +91,13 @@ PROCESSING_TIME = {
     "AIR":     {"base_h": 1.5},    # cargo terminal
 }
 
+# ── Quantity Thresholds per Mode ──────────────────────────────
+MODE_MIN_QUANTITY = {
+    "HIGHWAY": 1,
+    "SEA":     500,  # container minimum
+    "AIR":     5,
+}
+
 # ── Risk Penalty Coefficients ─────────────────────────────────
 ALPHA_COST_PENALTY = 0.25    # α: scales insurance/hazard cost in high-risk zones
 BETA_DELAY_COEFF   = 0.35    # β: scales transit delay in high-risk zones
@@ -105,6 +112,7 @@ CARGO_MODE_BLACKLIST = {
 }
 
 # ── Default Shipment Parameters ───────────────────────────────
+DEFAULT_QUANTITY = 100.0
 DEFAULT_PRODUCT_TYPE = "general"
 DEFAULT_OMEGA = 0.5            # balanced cost-time preference
 DEFAULT_MAX_BUDGET = float("inf")

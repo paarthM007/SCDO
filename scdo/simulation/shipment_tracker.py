@@ -81,10 +81,19 @@ DEMO_CRISIS_PATH = [
 ]
 
 class ActiveShipment:
-    def __init__(self, shipment_id: str, cargo_type: str, route_plan: List[Union[NodeStep, LinkStep]]):
+    def __init__(self, shipment_id: str, cargo_type: str, route_plan: List[Union[NodeStep, LinkStep]],
+                 quantity: float = 100.0, product_type: str = "general",
+                 max_budget: float = float('inf'), deadline_h: float = float('inf'),
+                 omega: float = 0.5):
         self.shipment_id = shipment_id
         self.cargo_type = cargo_type
         self.route_plan = route_plan
+        self.quantity = quantity
+        self.product_type = product_type
+        self.max_budget = max_budget
+        self.deadline_h = deadline_h
+        self.omega = omega
+        
         self.current_step_index = 0
         self.progress_on_step = 0.0
         self.status = 'IN_TRANSIT'
@@ -162,6 +171,12 @@ class ShipmentOrchestrator:
                         shipment.decision_logs.append("SUCCESS: Shipment delivered successfully. Operations concluded.")
                         shipment.progress_on_step = 0.0
                         break
+                        
+                    # DEMO FIX: If we just finished a LinkStep (actual transport), 
+                    # we break the loop so the UI can render the arrival at the next node.
+                    # This prevents the simulation from 'zipping' through multiple link+node pairs in one tick.
+                    if not isinstance(current_step, NodeStep):
+                        break
                 else:
                     # The truck is still moving along the current step. 
                     # Break the loop and wait for the next API tick from Flutter.
@@ -198,7 +213,12 @@ class ShipmentOrchestrator:
                 new_route_response = find_route(
                     origin=divert_node.name,
                     destination=final_node.name,
-                    cargo_type=shipment.cargo_type
+                    cargo_type=shipment.cargo_type,
+                    quantity=shipment.quantity,
+                    product_type=shipment.product_type,
+                    omega=shipment.omega,
+                    max_budget=shipment.max_budget,
+                    deadline_h=shipment.deadline_h
                 )
                 
                 if "error" in new_route_response:
@@ -259,6 +279,8 @@ class ShipmentOrchestrator:
             
             # THE SPLICE: Replace remaining steps with the crisis path
             # We keep the steps already completed and append the alternate route
+            # In a real scenario, we would call find_route here, but for the demo 
+            # we use the hardcoded DEMO_CRISIS_PATH.
             shipment.route_plan = shipment.route_plan[:shipment.current_step_index] + DEMO_CRISIS_PATH
             
             # UI Flags to trigger Flutter animations

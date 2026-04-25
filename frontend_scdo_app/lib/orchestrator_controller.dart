@@ -98,10 +98,10 @@ class OrchestratorController extends ChangeNotifier {
         // Update UI immediately with latest position / status
         notifyListeners();
 
-        // Stream new logs sequentially (non-blocking) so the UI
-        // renders them one by one with a human-readable delay
+        // Stream new logs sequentially (blocking this tick's completion)
+        // so the UI has time to render them before the scenario ends.
         if (currentShipment!.freshLogs.isNotEmpty) {
-          _streamLogsSequentially(currentShipment!.freshLogs);
+          await _streamLogsSequentially(currentShipment!.freshLogs);
         }
 
         // Terminate the scenario if delivered or route is exhausted

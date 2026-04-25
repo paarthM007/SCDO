@@ -606,7 +606,7 @@ class _TelemetryChartWidgetState extends State<TelemetryChartWidget> {
           : LineChart(
             LineChartData(
               minY: 0,
-              maxY: (history.reduce(max) * 1.4).clamp(threshold * 1.2, 20.0),
+              maxY: max(history.reduce(max) * 1.4, threshold * 1.2).clamp(0.0, 100.0),
               gridData: FlGridData(
                 show: true,
                 drawVerticalLine: false,
@@ -658,7 +658,7 @@ class _TelemetryChartWidgetState extends State<TelemetryChartWidget> {
                     show: true,
                     gradient: LinearGradient(
                       begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                      colors: [chartColor.withOpacity(0.2), chartColor.withOpacity(0.0)],
+                      colors: [chartColor.withOpacity(0.4), chartColor.withOpacity(0.0)],
                     ),
                   ),
                 ),
@@ -739,10 +739,9 @@ class AuditTrailWidget extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   itemCount: logs.length,
                   itemBuilder: (context, index) {
-                    // Show logs newest-first
-                    final log = logs[logs.length - 1 - index];
-                    final isAlert = log.contains('ALERT') || log.contains('CRISIS') || log.contains('FAILED');
-                    final isSuccess = log.contains('SUCCESS') || log.contains('DISPATCHED');
+                    final log = logs[index];
+                    final isAlert = log.contains('ALERT') || log.contains('CRISIS') || log.contains('FAILED') || log.contains('CRITICAL') || log.contains('TELEMETRY');
+                    final isSuccess = log.contains('SUCCESS') || log.contains('DISPATCHED') || log.contains('REASONING');
                     Color logColor = GlassTheme.accentNeonGreen.withOpacity(0.7);
                     if (isAlert) logColor = GlassTheme.danger.withOpacity(0.9);
                     else if (isSuccess) logColor = GlassTheme.accentCyan;

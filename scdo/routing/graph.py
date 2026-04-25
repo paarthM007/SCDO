@@ -81,6 +81,8 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
 CARGO_PROFILES = {
     'PERISHABLE': {'time': 0.80, 'cost': 0.05, 'risk': 0.15},
     'HIGH_VALUE': {'time': 0.20, 'cost': 0.10, 'risk': 0.70},
+    'HAZMAT':     {'time': 0.30, 'cost': 0.20, 'risk': 0.50},
+    'ELECTRONICS':{'time': 0.50, 'cost': 0.20, 'risk': 0.30},
     'BULK':       {'time': 0.10, 'cost': 0.80, 'risk': 0.10},
     'STANDARD':   {'time': 0.33, 'cost': 0.33, 'risk': 0.34},
 }
@@ -151,8 +153,8 @@ def compute_edge_time(mode: str, dist_km: float, quantity: float,
     """
     s = SPEED_CONSTANTS.get(mode, 65.0)
     transit = (dist_km / s) * (1.0 + risk_score * BETA_DELAY_COEFF)
-    p_cfg = PROCESSING_TIME.get(mode, {"base_h": 1.0, "per_unit_h": 0.001})
-    processing = p_cfg["base_h"] + p_cfg["per_unit_h"] * quantity
+    p_cfg = PROCESSING_TIME.get(mode, {"base_h": 1.0, "per_unit_h": 0.0})
+    processing = p_cfg.get("base_h", 0.0) + p_cfg.get("per_unit_h", 0.0) * quantity
     return transit + processing
 
 
