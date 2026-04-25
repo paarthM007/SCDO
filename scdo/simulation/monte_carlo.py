@@ -20,7 +20,7 @@ from scdo.simulation.route_builder import build_route_with_nodes
 from scdo.config import (
     ALPHA_COST_PENALTY, BETA_DELAY_COEFF,
     SPEED_CONSTANTS, VARIABLE_RATE, FIXED_OVERHEAD,
-    PROCESSING_TIME, DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE,
+    PROCESSING_TIME, DEFAULT_PRODUCT_TYPE,
 )
 from scdo.routing.cities_data import get_waypoints_by_names
 
@@ -48,8 +48,7 @@ def _apply_gaussian_noise(base_value: float, sigma_fraction: float) -> float:
 def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                     importance_boost=1.0, facility_configs=None, gmaps=None,
                     combined_risk_score=0.0,
-                    # ── v3.0 CTR parameters ──
-                    quantity=None, product_type=None, path_edges=None):
+                    product_type=None, path_edges=None):
     """
     Runs DES N times using pure Monte Carlo + importance sampling.
     
@@ -60,7 +59,6 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
     random.seed(seed)
     np.random.seed(seed)
 
-    Q = quantity if quantity is not None else DEFAULT_QUANTITY
     pt = product_type or DEFAULT_PRODUCT_TYPE
 
     # CTR-synchronized risk multipliers
@@ -102,7 +100,6 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                 )
 
         shipment = Shipment(env, f"MC-{i+1:03d}")
-        shipment.quantity = Q if Q is not None else 1.0
         shipment.product_type = pt if pt is not None else "general"
 
         def _run(sh=shipment, rt=planner.route):
@@ -126,14 +123,13 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
 
     mc_elapsed = time.time() - mc_start
     logger.info(f"MC completed: {n_iterations} iterations in {mc_elapsed:.2f}s "
-                f"(Q={Q}, type={pt}, risk={combined_risk_score:.2f})")
+                f"(type={pt}, risk={combined_risk_score:.2f})")
 
     stats = calculate_stats(times, costs, weights, n_iterations,
                             importance_boost > 1.0)
 
     # ── v3.0: Attach CTR metadata to stats ──
     stats["ctr_params"] = {
-        "quantity": Q,
         "product_type": pt,
         "risk_score": round(combined_risk_score, 4),
         "delay_coefficient_beta": BETA_DELAY_COEFF,
@@ -198,20 +194,20 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
                              target_date=None, n_iterations=50, seed=42,
                              importance_boost=1.0, facility_configs=None,
                              # ── v3.0 CTR parameters ──
-                             quantity=None, product_type=None, path_edges=None):
+                             product_type=None, path_edges=None):
     """
     Complete entry point: fetches combined risk, runs MC, returns result dict.
     Called by worker.py.
     
-    v3.0: Forwards quantity and product_type to Monte Carlo engine for
+    v3.0: Forwards product_type to Monte Carlo engine for
     CTR-synchronized stochastic simulation.
     """
     from scdo.risk.combined_risk import compute_combined_risk
     from datetime import datetime, timezone
 
     logger.info("=== run_simulation_with_risk ===")
-    logger.info("  Cities: %s, Modes: %s, Q=%s, Type=%s",
-                cities, modes, quantity, product_type)
+    logger.info("  Cities: %s, Modes: %s, Type=%s",
+                cities, modes, product_type)
 
     # Step 1: Compute combined risk
     try:
@@ -229,7 +225,6 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
         importance_boost=importance_boost,
         facility_configs=facility_configs,
         combined_risk_score=combined_risk_score,
-        quantity=quantity,
         product_type=product_type,
         path_edges=path_edges,
     )
@@ -240,7 +235,6 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
             "cities": cities, "modes": modes,
             "cargo_type": cargo_type, "target_date": target_date,
             "n_iterations": n_iterations, "seed": seed,
-            "quantity": quantity,
             "product_type": product_type or cargo_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
@@ -276,7 +270,6 @@ def _run_mc_job(job_config):
             seed=job_config.get("seed", 42),
             importance_boost=job_config.get("importance_boost", 1.0),
             facility_configs=job_config.get("facility_configs"),
-            quantity=job_config.get("quantity"),
             product_type=job_config.get("product_type"),
             path_edges=job_config.get("path_edges"),
         )

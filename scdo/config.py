@@ -82,13 +82,13 @@ SPEED_CONSTANTS = {
     "RAIL":    60.0,
 }
 
-# ── Processing Time P(mode, Q) parameters ─────────────────────
-# P(mode, Q) = base_hours + per_unit_hours * Q
+# ── Processing Time P(mode) parameters ─────────────────────
+# P(mode) = base_hours
 # Represents loading/unloading, customs processing etc.
 PROCESSING_TIME = {
-    "HIGHWAY": {"base_h": 0.5,  "per_unit_h": 0.0005},   # fast loading
-    "SEA":     {"base_h": 6.0,  "per_unit_h": 0.0025},   # port operations
-    "AIR":     {"base_h": 1.5,  "per_unit_h": 0.001},    # cargo terminal
+    "HIGHWAY": {"base_h": 0.5},   # fast loading
+    "SEA":     {"base_h": 6.0},   # port operations
+    "AIR":     {"base_h": 1.5},    # cargo terminal
 }
 
 # ── Risk Penalty Coefficients ─────────────────────────────────
@@ -104,17 +104,7 @@ CARGO_MODE_BLACKLIST = {
     ("pharmaceuticals", "SEA"),  # temperature-sensitive
 }
 
-# ── Quantity Thresholds ───────────────────────────────────────
-# Below this quantity, certain modes are mathematically inferior.
-# (mode → minimum sensible quantity for that mode)
-MODE_MIN_QUANTITY = {
-    "SEA": 100,    # below 100 units, sea overhead dominates
-    "AIR": 1,      # air is viable for any quantity
-    "HIGHWAY": 1,  # road is always viable
-}
-
 # ── Default Shipment Parameters ───────────────────────────────
-DEFAULT_QUANTITY = 100
 DEFAULT_PRODUCT_TYPE = "general"
 DEFAULT_OMEGA = 0.5            # balanced cost-time preference
 DEFAULT_MAX_BUDGET = float("inf")

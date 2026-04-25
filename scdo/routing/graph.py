@@ -3,7 +3,7 @@ graph.py - Multi-modal routing graph with cargo-aware CTR Dijkstra.
 SCDO Logistics Engine v3.0: Cost-Time-Risk Tensor edge weighting.
 
 Edge weights are computed dynamically at Dijkstra runtime based on shipment
-variables (quantity Q, product_type, risk R, user preference ω).
+variables (product_type, risk R, user preference ω).
 """
 import math
 import heapq
@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from scdo.config import (
     FIXED_OVERHEAD, VARIABLE_RATE, SPEED_CONSTANTS, PROCESSING_TIME,
     ALPHA_COST_PENALTY, BETA_DELAY_COEFF, CARGO_MODE_BLACKLIST,
-    MODE_MIN_QUANTITY, DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE,
+    DEFAULT_PRODUCT_TYPE,
     DEFAULT_OMEGA, DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H,
     CARGO_REQUIREMENTS,
 )
@@ -129,34 +129,34 @@ def _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type='STANDARD'
 # CTR Tensor: Dynamic Cost & Time Functions
 # ══════════════════════════════════════════════════════════════
 
-def compute_edge_cost(mode: str, dist_km: float, quantity: float,
+def compute_edge_cost(mode: str, dist_km: float,
                       product_type: str, risk_score: float) -> float:
     """
     Holistic Cost Model C_total for a single edge.
-    C_total = F(mode, p) + (Q · d · V_mode) · (1 + R · α)
+    C_total = F(mode, p) + (d · V_mode) · (1 + R · α)
     """
     key = (mode, product_type)
     F = FIXED_OVERHEAD.get(key, FIXED_OVERHEAD.get((mode, "general"), 0.0))
     V = VARIABLE_RATE.get(mode, 0.0005)
-    variable = quantity * dist_km * V
+    variable = dist_km * V
     risk_factor = 1.0 + risk_score * ALPHA_COST_PENALTY
     return F + variable * risk_factor
 
 
-def compute_edge_time(mode: str, dist_km: float, quantity: float,
+def compute_edge_time(mode: str, dist_km: float,
                       risk_score: float) -> float:
     """
     Stochastic Time Model T_total for a single edge.
-    T_total = (d / s_mode) · (1 + R · β) + P(mode, Q)
+    T_total = (d / s_mode) · (1 + R · β) + P(mode)
     """
     s = SPEED_CONSTANTS.get(mode, 65.0)
     transit = (dist_km / s) * (1.0 + risk_score * BETA_DELAY_COEFF)
-    p_cfg = PROCESSING_TIME.get(mode, {"base_h": 1.0, "per_unit_h": 0.001})
-    processing = p_cfg["base_h"] + p_cfg["per_unit_h"] * quantity
+    p_cfg = PROCESSING_TIME.get(mode, {"base_h": 1.0})
+    processing = p_cfg["base_h"]
     return transit + processing
 
 
-def compute_edge_weight(mode: str, dist_km: float, quantity: float,
+def compute_edge_weight(mode: str, dist_km: float,
                         product_type: str, risk_score: float,
                         omega: float) -> float:
     """
@@ -168,8 +168,8 @@ def compute_edge_weight(mode: str, dist_km: float, quantity: float,
     Here we use a scaling approach: cost is divided by a reference factor
     to bring it into comparable range with time (hours).
     """
-    cost = compute_edge_cost(mode, dist_km, quantity, product_type, risk_score)
-    time_h = compute_edge_time(mode, dist_km, quantity, risk_score)
+    cost = compute_edge_cost(mode, dist_km, product_type, risk_score)
+    time_h = compute_edge_time(mode, dist_km, risk_score)
     
     # Normalization factors (reference scales to balance cost vs time)
     COST_NORM = 500.0   # ~$500 is a "typical" edge cost
@@ -181,17 +181,13 @@ def compute_edge_weight(mode: str, dist_km: float, quantity: float,
     return omega * c_hat + (1.0 - omega) * t_hat
 
 
-def is_cargo_compatible(mode: str, product_type: str, quantity: float) -> bool:
+def is_cargo_compatible(mode: str, product_type: str) -> bool:
     """
     Constraint Pruning: checks cargo-mode compatibility.
     Returns False if the edge should be skipped.
     """
     # Hard blacklist
     if (product_type, mode) in CARGO_MODE_BLACKLIST:
-        return False
-    # Quantity threshold — skip modes with high overhead for small shipments
-    min_q = MODE_MIN_QUANTITY.get(mode, 1)
-    if quantity < min_q:
         return False
     return True
 
@@ -314,12 +310,12 @@ def _edge_weight(edge, objective):
 def dijkstra(graph, src_id, dst_id, allowed_modes=None,
              objective="FASTEST", blocked_nodes=None,
              # ── v3.0 CTR shipment parameters ──
-             quantity=None, product_type=None, risk_score=0.0,
+             product_type=None, risk_score=0.0,
              omega=None, max_budget=None, deadline_h=None, cargo_type="STANDARD"):
     """
     Cargo-aware Dijkstra with CTR Tensor edge weighting.
     
-    When v3.0 parameters (quantity, product_type, omega) are provided,
+    When v3.0 parameters (product_type, omega) are provided,
     edge weights are computed dynamically using the CTR formulas.
     Otherwise, falls back to legacy static weights for backward compatibility.
     
@@ -337,8 +333,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     if dst_id in blocked: raise ValueError(f"Destination '{dst_id}' is in blocked list")
 
     # Determine if we're using v3.0 CTR mode
-    use_ctr = quantity is not None
-    Q = quantity if quantity is not None else DEFAULT_QUANTITY
+    use_ctr = product_type is not None
     pt = product_type or DEFAULT_PRODUCT_TYPE
     R = risk_score
     budget_limit = max_budget if max_budget is not None else DEFAULT_MAX_BUDGET
@@ -372,7 +367,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
 
             if use_ctr:
                 # ── v3.0 Cargo-aware pruning ──
-                if not is_cargo_compatible(mode, pt, Q):
+                if not is_cargo_compatible(mode, pt):
                     continue
 
                 # ── Phase 1: Inject Live Crises (Risk Multipliers) ──
@@ -382,8 +377,8 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
                 multiplier = cm.active_risk_multipliers.get(target_name, 1.0)
 
                 # Compute actual cost, time, and risk with crisis multipliers
-                edge_cost = compute_edge_cost(mode, d_km, Q, pt, R)
-                edge_time = compute_edge_time(mode, d_km, Q, R) * multiplier
+                edge_cost = compute_edge_cost(mode, d_km, pt, R)
+                edge_time = compute_edge_time(mode, d_km, R) * multiplier
                 edge_risk = multiplier * (1.0 + R)
 
                 # ── Phase 2: Dynamic Cargo Weighting ──

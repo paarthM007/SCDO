@@ -42,7 +42,7 @@ class TransportLink:
     def _scale_cost(self, cost):
         return cost * getattr(self, '_risk_cost_multiplier', 1.0)
         
-    def _get_accurate_baselines(self, shipment_quantity, product_type):
+    def _get_accurate_baselines(self, product_type):
         if self.ctr_base_time is not None and self.ctr_base_cost is not None:
             return self.ctr_base_time, self.ctr_base_cost
             
@@ -54,10 +54,9 @@ class TransportLink:
         speed = SPEED_CONSTANTS.get(self.mode, 50.0)
         time_h = dist_km / speed
         
-        q = shipment_quantity
         var_rate = VARIABLE_RATE.get(self.mode, 0.001)
         fixed_cost = FIXED_OVERHEAD.get((self.mode, product_type), FIXED_OVERHEAD.get((self.mode, "general"), 100.0))
-        cost_usd = fixed_cost + (var_rate * dist_km * q)
+        cost_usd = fixed_cost + (var_rate * dist_km)
         
         return time_h, cost_usd
 
@@ -92,7 +91,7 @@ class RoadLink(TransportLink):
         self.cost_per_hour = cost_per_hour
         
     def traverse(self, shipment):
-        base_time, base_cost = self._get_accurate_baselines(shipment.quantity, shipment.product_type)
+        base_time, base_cost = self._get_accurate_baselines(shipment.product_type)
         if hasattr(self, '_pre_delay'):
             delay = self._pre_delay
         elif self.google_client:
@@ -122,7 +121,7 @@ class RailLink(TransportLink):
         self.cost_per_hour = cost_per_hour
         
     def traverse(self, shipment):
-        base_time, base_cost = self._get_accurate_baselines(shipment.quantity, shipment.product_type)
+        base_time, base_cost = self._get_accurate_baselines(shipment.product_type)
         if hasattr(self, '_pre_delay'):
             delay = self._pre_delay
         elif self.rail_client:
@@ -150,7 +149,7 @@ class AirLink(TransportLink):
         self.cost_per_hour = cost_per_hour
         
     def traverse(self, shipment):
-        base_time, base_cost = self._get_accurate_baselines(shipment.quantity, shipment.product_type)
+        base_time, base_cost = self._get_accurate_baselines(shipment.product_type)
         if hasattr(self, '_pre_delay'):
             delay = self._pre_delay
         else:
@@ -177,7 +176,7 @@ class ShipLink(TransportLink):
         self.cost_per_hour = cost_per_hour
         
     def traverse(self, shipment):
-        base_time, base_cost = self._get_accurate_baselines(shipment.quantity, shipment.product_type)
+        base_time, base_cost = self._get_accurate_baselines(shipment.product_type)
         if hasattr(self, '_pre_delay'):
             delay = self._pre_delay
         elif self.sea_client:

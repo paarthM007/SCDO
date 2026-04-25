@@ -38,7 +38,6 @@ def process_job(doc_id, data):
             cargo_type=data.get("cargo_type", "general"),
             n_iterations=data.get("n_iterations", 50),
             # v3.0 CTR parameters
-            quantity=data.get("quantity"),
             product_type=data.get("product_type"),
             path_edges=data.get("path_edges"),
         )

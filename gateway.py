@@ -140,7 +140,6 @@ def api_simulate():
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
             # v3.0 CTR parameters
-            "quantity": data.get("quantity"),
             "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
@@ -159,7 +158,7 @@ def api_simulate():
 def api_alternate_route():
     """
     Return path options only — no simulation is triggered.
-    v3.0: Accepts quantity, product_type, budget, deadline_h, omega.
+    v3.0: Accepts product_type, budget, deadline_h, omega.
     """
     uid = _get_user()
     if not uid: return _err("Unauthorized", 401)
@@ -167,12 +166,6 @@ def api_alternate_route():
     data = request.json or {}
 
     # Parse v3.0 CTR parameters
-    quantity = data.get("quantity")
-    if quantity is not None:
-        try:
-            quantity = float(quantity)
-        except (ValueError, TypeError):
-            quantity = None
 
     budget = data.get("budget")
     if budget is not None:
@@ -200,7 +193,6 @@ def api_alternate_route():
         destination=data.get("end"),
         blocked_nodes=data.get("blocked", []),
         cargo_type=data.get("cargo_type", "general"),
-        quantity=quantity,
         product_type=data.get("product_type"),
         budget=budget,
         deadline_h=deadline_h,
@@ -511,8 +503,7 @@ def api_dispatch():
     route_resp = find_route(
         origin=origin,
         destination=destination,
-        cargo_type=cargo_type,
-        quantity=100
+        cargo_type=cargo_type
     )
     
     if "error" in route_resp:
