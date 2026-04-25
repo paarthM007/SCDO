@@ -1,16 +1,13 @@
 import requests
-from typing import List
-from scdo.config import NEWS_API_KEY
-
-import requests
 from datetime import datetime, timedelta
 from typing import List
+from scdo.config import NEWS_API_KEY
 
 class NewsClient:
     """
     Fetches supply-chain related intelligence from NewsAPI and Reddit.
     """
-    def __init__(self, news_api_key: str):
+    def __init__(self, news_api_key: str = NEWS_API_KEY):
         self.news_api_key = news_api_key
 
     def fetch_source_briefs(self, city_name: str, country_name: str) -> dict:
