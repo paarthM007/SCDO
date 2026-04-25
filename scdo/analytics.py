@@ -50,6 +50,10 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
                 "risk_score": d["result"].get("combined_risk", {}).get("score"),
                 "risk_level": d["result"].get("combined_risk", {}).get("level"),
             }
+            # Preserve geographic data for History Graph visualization
+            d["waypoints"] = d["result"].get("waypoints", [])
+            d["path_edges"] = d["result"].get("path_edges", [])
+            
             del d["result"]  # Don't send full result in listing
         jobs.append(d)
     return jobs

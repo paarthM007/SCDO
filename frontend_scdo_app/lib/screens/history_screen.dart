@@ -349,20 +349,19 @@ class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateM
                                             ),
                                           ),
 
-                                          if (isCompleted) ...[
-                                            IconButton(
-                                              icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
-                                              tooltip: "Rate city risks",
-                                              onPressed: () => _showFeedbackDialog(job),
-                                            ),
-                                          ],
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
-                                            onPressed: () => _deleteJob(job['job_id']),
-                                            tooltip: 'Delete Job',
-                                          ),
-                                        ],
-                                      ),
+                                           if (isCompleted) ...[
+                                             IconButton(
+                                               icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
+                                               tooltip: "Rate city risks",
+                                               onPressed: () => _showFeedbackDialog(job),
+                                             ),
+                                             IconButton(
+                                               icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
+                                               onPressed: () => _deleteJob(job['job_id']),
+                                               tooltip: 'Delete Job',
+                                             ),
+                                           ],
+                                        ),
                                       if (isCompleted && job['summary'] != null) ...[
                                         const Divider(color: Colors.white12, height: 24),
                                         _buildSummaryGrid(job['summary']),

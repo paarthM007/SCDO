@@ -3,7 +3,7 @@ graph.py - Multi-modal routing graph with cargo-aware CTR Dijkstra.
 SCDO Logistics Engine v3.0: Cost-Time-Risk Tensor edge weighting.
 
 Edge weights are computed dynamically at Dijkstra runtime based on shipment
-variables (quantity Q, product_type, risk R, user preference ω).
+variables (product_type, risk R, user preference ω).
 """
 import math
 import heapq

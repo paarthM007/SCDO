@@ -3,7 +3,6 @@ router.py - High-level routing API with cargo-aware CTR routing.
 SCDO Logistics Engine v3.0: Multi-factor logistics modeling.
 
 Supports:
-  - Quantity-dependent dynamic edge weights
   - Product-type cargo restrictions  
   - Budget constraint pruning
   - Feasibility Index (F_idx) computation
@@ -19,7 +18,7 @@ from scdo.routing.graph import (
     compute_feasibility_index, compute_edge_cost, compute_edge_time,
 )
 from scdo.config import (
-    DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
+    DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
     DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H, CARGO_REQUIREMENTS,
 )
 
@@ -42,7 +41,7 @@ def get_graph() -> GlobalRoutingGraph:
 
 def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
                   # v3.0 shipment context
-                  quantity=None, product_type=None, budget=None, deadline_h=None,
+                  product_type=None, budget=None, deadline_h=None,
                   omega=None, risk_score=0.0):
     """Build a full route result dict from path edges."""
     total_km = sum(e["dist_km"] for e in path_edges)
@@ -127,13 +126,11 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
     result["background_edges"] = bg_edges
 
     # ── v3.0: Shipment Context ──
-    if quantity is not None:
-        result["shipment"] = {
-            "quantity": quantity,
-            "product_type": product_type or DEFAULT_PRODUCT_TYPE,
-            "omega": omega if omega is not None else DEFAULT_OMEGA,
-            "risk_score": round(risk_score, 4),
-        }
+    result["shipment"] = {
+        "product_type": product_type or DEFAULT_PRODUCT_TYPE,
+        "omega": omega if omega is not None else DEFAULT_OMEGA,
+        "risk_score": round(risk_score, 4),
+    }
 
     # ── v3.0: Feasibility Index ──
     effective_budget = budget if budget is not None else DEFAULT_MAX_BUDGET
@@ -169,14 +166,14 @@ def _make_seg(mode, start, edges):
 def find_route(origin, destination, mode_pref="BEST",
                objective="FASTEST", blocked_nodes=None,
                # ── v3.0 CTR shipment parameters ──
-               quantity=None, product_type=None, risk_score=0.0,
+               product_type=None, risk_score=0.0,
                omega=None, max_budget=None, deadline_h=None,
                cargo_type="STANDARD"):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.
     
-    v3.0: When quantity/product_type are provided, uses CTR Tensor
+    v3.0: When product_type is provided, uses CTR Tensor
     dynamic edge weighting with cargo-aware constraint pruning.
     Phase 2: Uses cargo_type for Dynamic Cargo Weighting (Multi-Objective).
     """
@@ -206,7 +203,8 @@ def find_route(origin, destination, mode_pref="BEST",
     try:
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
-            quantity=quantity, product_type=product_type,
+            quantity=quantity,
+            product_type=product_type,
             risk_score=risk_score, omega=omega, max_budget=max_budget,
             deadline_h=deadline_h, cargo_type=cargo_type
         )
@@ -219,14 +217,12 @@ def find_route(origin, destination, mode_pref="BEST",
             msg += f" (avoiding {len(blocked_ids)} blocked nodes)"
         if product_type and product_type != "general":
             msg += f" for cargo type '{product_type}'"
-        if quantity and quantity < 100:
-            msg += f" (quantity {quantity} may be below mode thresholds)"
         return {"origin": graph.nodes[src_id]["name"],
                 "destination": graph.nodes[dst_id]["name"], "error": msg}
 
     result = _build_result(
         graph, src_id, dst_id, path_edges, mode_pref, objective,
-        quantity=quantity, product_type=product_type,
+        product_type=product_type,
         budget=max_budget, deadline_h=deadline_h,
         omega=omega, risk_score=risk_score,
     )
@@ -238,7 +234,7 @@ def find_route(origin, destination, mode_pref="BEST",
 def find_alternate_route(origin, destination, blocked_nodes,
                          cargo_type="general", mode_pref=None,
                          # ── v3.0 CTR parameters ──
-                         quantity=None, product_type=None,
+                         quantity=0.0, product_type=None,
                          budget=None, deadline_h=None, omega=None):
     """
     Functionality 2: Find best alternate route avoiding blocked cities.
@@ -271,7 +267,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 1. Fastest
     r_fast = find_route(
         origin, destination, effective_mode, "FASTEST", blocked_nodes,
-        quantity=quantity, product_type=effective_product,
+        product_type=effective_product, quantity=quantity,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -280,7 +276,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 2. Cheapest
     r_cheap = find_route(
         origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
-        quantity=quantity, product_type=effective_product,
+        product_type=effective_product, quantity=quantity,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -294,7 +290,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
             temp_blocked = list(blocked_nodes or []) + [mid_node_name]
             alt_cheap = find_route(
                 origin, destination, effective_mode, "CHEAPEST", temp_blocked,
-                quantity=quantity, product_type=effective_product,
+                product_type=effective_product, quantity=quantity,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
                 cargo_type=phase_2_cargo
             )
@@ -305,7 +301,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 3. Balanced
     r_bal = find_route(
         origin, destination, effective_mode, "BALANCED", blocked_nodes,
-        quantity=quantity, product_type=effective_product,
+        product_type=effective_product, quantity=quantity,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -319,7 +315,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
             temp_blocked = list(blocked_nodes or []) + [first_int_name]
             alt_bal = find_route(
                 origin, destination, effective_mode, "BALANCED", temp_blocked,
-                quantity=quantity, product_type=effective_product,
+                product_type=effective_product, quantity=quantity,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
                 cargo_type=phase_2_cargo
             )
@@ -339,7 +335,6 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "effective_mode": effective_mode,
         # v3.0 shipment context echoed back
         "shipment_params": {
-            "quantity": quantity,
             "product_type": effective_product,
             "budget": budget,
             "deadline_h": deadline_h,

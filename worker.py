@@ -19,6 +19,8 @@ def claim_job(transaction, doc_ref):
         return True
     return False
 
+import traceback
+
 def process_job(doc_id, data):
     db = get_db()
     doc_ref = db.collection(FIRESTORE_COLLECTION).document(doc_id)
@@ -36,15 +38,20 @@ def process_job(doc_id, data):
             cargo_type=data.get("cargo_type", "general"),
             n_iterations=data.get("n_iterations", 50),
             # v3.0 CTR parameters
-            quantity=data.get("quantity"),
             product_type=data.get("product_type"),
             path_edges=data.get("path_edges"),
         )
         doc_ref.update({"status": "completed", "result": result, "completed_at": firestore.SERVER_TIMESTAMP})
         logger.info(f"Job {doc_id} completed successfully.")
     except Exception as e:
-        logger.error(f"Job {doc_id} failed: {e}")
-        doc_ref.update({"status": "failed", "error": str(e), "failed_at": firestore.SERVER_TIMESTAMP})
+        err_stack = traceback.format_exc()
+        logger.error(f"Job {doc_id} failed: {e}\n{err_stack}")
+        doc_ref.update({
+            "status": "failed", 
+            "error": str(e), 
+            "traceback": err_stack,
+            "failed_at": firestore.SERVER_TIMESTAMP
+        })
 
 def start_listener():
     db = get_db()

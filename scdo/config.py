@@ -49,44 +49,46 @@ MAX_MC_ITERATIONS = int(_get_env("MAX_MC_ITERATIONS", 500))
 # Keys: (mode, product_type) → fixed cost.
 # "general" is the fallback for unlisted product types.
 FIXED_OVERHEAD = {
-    ("HIGHWAY", "general"):      50.0,
-    ("HIGHWAY", "perishable"):   120.0,
-    ("HIGHWAY", "hazmat"):       200.0,
-    ("HIGHWAY", "electronics"):  80.0,
-    ("HIGHWAY", "bulk_commodity"): 40.0,
-    ("SEA", "general"):          500.0,
-    ("SEA", "perishable"):       800.0,   # reefer container surcharge
-    ("SEA", "hazmat"):           1200.0,  # IMO class handling
-    ("SEA", "electronics"):      600.0,
-    ("SEA", "bulk_commodity"):   350.0,
-    ("AIR", "general"):          300.0,
-    ("AIR", "perishable"):       450.0,
-    ("AIR", "hazmat"):           900.0,   # DG cargo handling
-    ("AIR", "electronics"):      350.0,
-    ("AIR", "bulk_commodity"):   700.0,   # air is bad for bulk
+    ("HIGHWAY", "general"):      25.0,
+    ("HIGHWAY", "perishable"):   60.0,
+    ("HIGHWAY", "hazmat"):       100.0,
+    ("HIGHWAY", "electronics"):  40.0,
+    ("HIGHWAY", "bulk_commodity"): 20.0,
+    ("SEA", "general"):          250.0,
+    ("SEA", "perishable"):       400.0,   # reefer container surcharge
+    ("SEA", "hazmat"):           600.0,  # IMO class handling
+    ("SEA", "electronics"):      300.0,
+    ("SEA", "bulk_commodity"):   175.0,
+    ("AIR", "general"):          150.0,
+    ("AIR", "perishable"):       225.0,
+    ("AIR", "hazmat"):           450.0,   # DG cargo handling
+    ("AIR", "electronics"):      175.0,
+    ("AIR", "bulk_commodity"):   350.0,   # air is bad for bulk
 }
 
 # ── Variable Rate V(mode) — cost per unit·km ──────────────────
 VARIABLE_RATE = {
-    "HIGHWAY": 0.0005,   # $/unit-km  (trucks, moderate)
-    "SEA":     0.00008,  # $/unit-km  (ships, cheapest per unit)
-    "AIR":     0.003,    # $/unit-km  (planes, most expensive)
+    "HIGHWAY": 0.00025,  # $/km (trucks, moderate)
+    "SEA":     0.00004,  # $/km (ships, cheapest)
+    "AIR":     0.0015,   # $/km (planes, most expensive)
+    "RAIL":    0.0001,   # $/km (trains, efficient)
 }
 
 # ── Speed Constants s(mode) — km/h ────────────────────────────
 SPEED_CONSTANTS = {
-    "HIGHWAY": 65.0,
-    "SEA":     46.0,
-    "AIR":     850.0,
+    "HIGHWAY": 80.0,
+    "SEA":     35.0,     # Adjusted to a realistic ~19 knots
+    "AIR":     900.0,
+    "RAIL":    60.0,
 }
 
-# ── Processing Time P(mode, Q) parameters ─────────────────────
-# P(mode, Q) = base_hours + per_unit_hours * Q
+# ── Processing Time P(mode) parameters ─────────────────────
+# P(mode) = base_hours
 # Represents loading/unloading, customs processing etc.
 PROCESSING_TIME = {
-    "HIGHWAY": {"base_h": 1.0,  "per_unit_h": 0.001},   # fast loading
-    "SEA":     {"base_h": 12.0, "per_unit_h": 0.005},    # port operations
-    "AIR":     {"base_h": 3.0,  "per_unit_h": 0.002},    # cargo terminal
+    "HIGHWAY": {"base_h": 0.5},   # fast loading
+    "SEA":     {"base_h": 6.0},   # port operations
+    "AIR":     {"base_h": 1.5},    # cargo terminal
 }
 
 # ── Risk Penalty Coefficients ─────────────────────────────────
@@ -102,17 +104,7 @@ CARGO_MODE_BLACKLIST = {
     ("pharmaceuticals", "SEA"),  # temperature-sensitive
 }
 
-# ── Quantity Thresholds ───────────────────────────────────────
-# Below this quantity, certain modes are mathematically inferior.
-# (mode → minimum sensible quantity for that mode)
-MODE_MIN_QUANTITY = {
-    "SEA": 100,    # below 100 units, sea overhead dominates
-    "AIR": 1,      # air is viable for any quantity
-    "HIGHWAY": 1,  # road is always viable
-}
-
 # ── Default Shipment Parameters ───────────────────────────────
-DEFAULT_QUANTITY = 100
 DEFAULT_PRODUCT_TYPE = "general"
 DEFAULT_OMEGA = 0.5            # balanced cost-time preference
 DEFAULT_MAX_BUDGET = float("inf")

@@ -28,8 +28,6 @@ class _AltRouteScreenState extends State<AltRouteScreen>
       TextEditingController(text: "Dubai, Istanbul");
 
   // ── v3.0 CTR Shipment Parameters ──────────────────────────
-  final TextEditingController _quantityCtrl =
-      TextEditingController(text: "500");
   final TextEditingController _budgetCtrl =
       TextEditingController(text: "5000");
   final TextEditingController _deadlineCtrl =
@@ -91,7 +89,6 @@ class _AltRouteScreenState extends State<AltRouteScreen>
             .where((s) => s.isNotEmpty)
             .toList(),
         // v3.0 CTR parameters
-        "quantity": double.tryParse(_quantityCtrl.text),
         "product_type": _productType,
         "budget": double.tryParse(_budgetCtrl.text),
         "deadline_h": double.tryParse(_deadlineCtrl.text),
@@ -128,26 +125,40 @@ class _AltRouteScreenState extends State<AltRouteScreen>
     }
   }
 
-  // ── Simulate a single chosen path ──────────────────────────
   Future<void> _simulatePath(String routeKey) async {
     setState(() {
       _simulatingPath[routeKey] = true;
     });
     try {
+      final routeData = _altRouteResult?[routeKey];
+      if (routeData == null || routeData.containsKey("error")) {
+        throw Exception("Invalid route selected.");
+      }
+
+      final waypoints = routeData["waypoints"] as List? ?? [];
+      final pathEdges = routeData["path_edges"] as List? ?? [];
+
+      List<String> cities = [];
+      List<String> modes = [];
+
+      if (waypoints.isNotEmpty) {
+        cities = waypoints.map<String>((wp) => wp["name"].toString()).toList();
+      }
+      if (pathEdges.isNotEmpty) {
+        final modeMap = {"HIGHWAY": "road", "SEA": "ship", "AIR": "air"};
+        modes = pathEdges.map<String>((e) => modeMap[e["mode"]] ?? "road").toList();
+      }
+
       final response = await http.post(
-        Uri.parse("$baseUrl/api/simulate-path"),
+        Uri.parse("$baseUrl/api/simulate"),
         headers: await _authHeaders(),
         body: jsonEncode({
-          "start": _altStart.text.trim(),
-          "end": _altEnd.text.trim(),
-          "blocked": _altBlocked.text
-              .split(',')
-              .map((e) => e.trim())
-              .where((s) => s.isNotEmpty)
-              .toList(),
-          "route_key": routeKey,
-          "quantity": double.tryParse(_quantityCtrl.text),
+          "cities": cities,
+          "modes": modes,
+          "path_edges": pathEdges,
+          "cargo_type": _productType, // using product type as cargo type since we merged them in the backend logic
           "product_type": _productType,
+          "source": "alternate_route_$routeKey",
         }),
       );
       var decoded = jsonDecode(response.body);
@@ -492,7 +503,6 @@ class _AltRouteScreenState extends State<AltRouteScreen>
   @override
   void dispose() {
     _animController?.dispose();
-    _quantityCtrl.dispose();
     _budgetCtrl.dispose();
     _deadlineCtrl.dispose();
     super.dispose();
@@ -555,17 +565,6 @@ class _AltRouteScreenState extends State<AltRouteScreen>
                                     color: GlassTheme.accentCyan)),
                         const SizedBox(height: 12),
                         Row(children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _quantityCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: "Quantity (units)",
-                                prefixIcon: Icon(Icons.inventory_2),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               isExpanded: true,

@@ -1279,3 +1279,18 @@ INDIA_STATES = {
     "Delhi","J&K","Ladakh","Puducherry","Dadra & NH","Daman & Diu",
     "Lakshadweep","Andaman & Nicobar",
 }
+
+def get_waypoints_by_names(names):
+    """Retrieve full waypoint objects for a list of city names."""
+    all_nodes = get_all_nodes()
+    name_map = {n["name"].lower(): n for n in all_nodes}
+    
+    results = []
+    for name in names:
+        n = name_map.get(name.lower())
+        if n:
+            results.append(n)
+        else:
+            # Fallback if city not found
+            results.append({"name": name, "lat": 0, "lon": 0})
+    return results
