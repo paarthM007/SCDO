@@ -1,3 +1,12 @@
+---
+title: SCDO API
+emoji: 🚀
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+---
+
 # SCDO v3.0 — Supply Chain Disruption Oracle 🚀
 
 > **A predictive, multi-modal supply chain optimization engine designed to detect disruptions before they happen and auto-reconfigure logistics paths using stochastic modeling.**
