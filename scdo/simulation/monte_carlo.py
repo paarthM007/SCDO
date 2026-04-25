@@ -22,6 +22,7 @@ from scdo.config import (
     SPEED_CONSTANTS, VARIABLE_RATE, FIXED_OVERHEAD,
     PROCESSING_TIME, DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE,
 )
+from scdo.routing.cities_data import get_waypoints_by_names
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,8 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
             "community_risk": risk_result.get("community_risk", {}),
         },
         "simulation_stats": sim_stats,
+        "waypoints": get_waypoints_by_names(cities),
+        "path_edges": path_edges,
     })
 
     logger.info("=== Simulation complete ===")

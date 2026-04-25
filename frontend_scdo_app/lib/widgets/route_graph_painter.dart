@@ -388,7 +388,7 @@ class _InteractiveRouteGraphState extends State<InteractiveRouteGraph> {
 
     final waypoints = (data['waypoints'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final pathEdges = (data['path_edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final riskScore = ((data['shipment'] as Map?)?['risk_score'] ?? 0.0) as num;
+    final riskScore = (data['summary']?['risk_score'] ?? (data['shipment'] as Map?)?['risk_score'] ?? 0.0) as num;
 
     if (waypoints.isEmpty) return;
 
@@ -446,7 +446,7 @@ class _InteractiveRouteGraphState extends State<InteractiveRouteGraph> {
 
     final waypoints = (data['waypoints'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final pathEdges = (data['path_edges'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    final riskScore = ((data['shipment'] as Map?)?['risk_score'] ?? 0.0) as num;
+    final riskScore = (data['summary']?['risk_score'] ?? (data['shipment'] as Map?)?['risk_score'] ?? 0.0) as num;
 
     return LayoutBuilder(builder: (context, constraints) {
       final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -487,6 +487,23 @@ class _InteractiveRouteGraphState extends State<InteractiveRouteGraph> {
           riskScore: riskScore.toDouble(),
           capacityLimit: (e['capacity_limit'] as num?)?.toDouble() ?? 100.0,
         ));
+      }
+
+      // ── Synthesize edges if path_edges is missing (standard simulations) ──
+      if (graphEdges.isEmpty && waypoints.length >= 2) {
+        for (int i = 0; i < waypoints.length - 1; i++) {
+          final wp0 = waypoints[i];
+          final wp1 = waypoints[i+1];
+          graphEdges.add(GraphEdge(
+            from: latLonToScreen((wp0['lat'] as num).toDouble(), (wp0['lon'] as num).toDouble(), size, _bounds),
+            to: latLonToScreen((wp1['lat'] as num).toDouble(), (wp1['lon'] as num).toDouble(), size, _bounds),
+            fromName: wp0['name'] ?? '',
+            toName: wp1['name'] ?? '',
+            mode: 'HIGHWAY', // Default fallback
+            distKm: 0, timeH: 2.0, costUsd: 0, 
+            riskScore: riskScore.toDouble(),
+          ));
+        }
       }
 
       // Build background edges
