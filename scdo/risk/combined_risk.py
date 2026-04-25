@@ -46,25 +46,40 @@ def _fetch_community_risk(cities):
         city_scores = {}
         total_reports = 0
 
+        from google.cloud.firestore import FieldFilter
         for city in cities:
             city_lower = city.strip().lower()
+            # Only filter by city in Firestore to avoid composite index requirement for date range
             docs = (
                 db.collection(COMMUNITY_COLLECTION)
-                  .where("city", "==", city_lower)
-                  .where("created_at", ">=", cutoff)
+                  .where(filter=FieldFilter("city", "==", city_lower))
                   .stream()
             )
 
-            # Deduplicate: keep only the latest rating per user
+            # Deduplicate: keep only the latest rating per user within the time window
             user_ratings = {}  # user_id -> (timestamp, rating)
             for doc in docs:
                 d = doc.to_dict()
+                
+                # Filter by date in Python
+                ts = d.get("created_at")
+                if ts:
+                    # Ensure ts is offset-aware for comparison
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts < cutoff:
+                        continue
+
                 r = d.get("risk_rating")
                 uid = d.get("user_id", "unknown")
-                ts = d.get("updated_at") or d.get("created_at")
+                updated_ts = d.get("updated_at") or ts
+                
+                if updated_ts and updated_ts.tzinfo is None:
+                    updated_ts = updated_ts.replace(tzinfo=timezone.utc)
+
                 if r is not None:
-                    if uid not in user_ratings or (ts and ts > user_ratings[uid][0]):
-                        user_ratings[uid] = (ts, float(r))
+                    if uid not in user_ratings or (updated_ts and updated_ts > user_ratings[uid][0]):
+                        user_ratings[uid] = (updated_ts, float(r))
 
             ratings = [v[1] for v in user_ratings.values()]
 

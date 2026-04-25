@@ -57,7 +57,8 @@ def start_listener():
                     process_job(change.document.id, data)
     
     # Use a query to listen for pending jobs
-    col_query = db.collection(FIRESTORE_COLLECTION).where("status", "==", "pending")
+    from google.cloud.firestore import FieldFilter
+    col_query = db.collection(FIRESTORE_COLLECTION).where(filter=FieldFilter("status", "==", "pending"))
     col_query.on_snapshot(on_snapshot)
     
     while True:

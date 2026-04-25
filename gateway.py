@@ -330,11 +330,12 @@ def api_feedback():
                 continue
             city_lower = city.strip().lower()
 
+            from google.cloud.firestore import FieldFilter
             # Check if this user already rated this city — upsert
             existing = (
                 db.collection("community_risk_reports")
-                  .where("user_id", "==", uid)
-                  .where("city", "==", city_lower)
+                  .where(filter=FieldFilter("user_id", "==", uid))
+                  .where(filter=FieldFilter("city", "==", city_lower))
                   .limit(1)
                   .stream()
             )

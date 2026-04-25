@@ -16,15 +16,16 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
     db = get_db()
     query = db.collection(FIRESTORE_COLLECTION)
 
+    from google.cloud.firestore import FieldFilter
     if user_id:
-        query = query.where("user_id", "==", user_id)
+        query = query.where(filter=FieldFilter("user_id", "==", user_id))
         
     query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit)
 
     if status_filter:
-        query = query.where("status", "==", status_filter)
+        query = query.where(filter=FieldFilter("status", "==", status_filter))
 
     docs = query.stream()
     jobs = []
@@ -58,10 +59,10 @@ def compute_analytics(limit=200, user_id=None):
     """Aggregate analytics over recent completed jobs."""
     db = get_db()
     query = db.collection(FIRESTORE_COLLECTION).where(
-        "status", "==", "completed"
+        filter=FieldFilter("status", "==", "completed")
     )
     if user_id:
-        query = query.where("user_id", "==", user_id)
+        query = query.where(filter=FieldFilter("user_id", "==", user_id))
         
     docs = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING

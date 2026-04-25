@@ -29,23 +29,63 @@ class GeminiClient:
 
     def evaluate_risks(self, city_headlines):
         if not self.client:
+            logger.warning("Gemini client not initialized (missing API key or google-genai package)")
             return {city: {"risk_score": 0.05, "primary_hazard": "None (Gemini unavailable)"}
                     for city in city_headlines}
 
         prompt = self._build_prompt(city_headlines)
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash",
+        
+        def _call_gemini(model_id):
+            return self.client.models.generate_content(
+                model=model_id,
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     response_mime_type="application/json",
                     temperature=0.1,
-                    max_output_tokens=8192
+                    max_output_tokens=2048
                 )
             )
+
+        try:
+            # Try models in order of preference
+            models_to_try = [
+                "gemini-2.5-flash", 
+                "gemini-2.0-flash", 
+                "gemini-1.5-flash", 
+                "gemini-1.5-flash-8b"
+            ]
+            response = None
+            last_error = None
+
+            for model_id in models_to_try:
+                try:
+                    response = _call_gemini(model_id)
+                    if response and response.text:
+                        break # Success!
+                except Exception as e:
+                    last_error = str(e)
+                    # If it's a quota error, log it and try next
+                    if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+                        logger.warning(f"Gemini {model_id} quota exhausted. Trying next model...")
+                    elif "404" in last_error or "NOT_FOUND" in last_error:
+                        logger.warning(f"Gemini {model_id} not found. Trying next model...")
+                    else:
+                        # For other errors, maybe it's a prompt issue, but let's try next anyway
+                        logger.warning(f"Gemini {model_id} failed: {last_error}. Trying next model...")
+            
+            if not response or not response.text:
+                raise ValueError(f"All Gemini models failed. Last error: {last_error}")
+            
             return json.loads(response.text)
         except Exception as e:
-            logger.error("Gemini evaluation failed: %s", e)
+            error_msg = str(e)
+            if "API key not valid" in error_msg:
+                logger.error("Gemini API Key is INVALID. Please check your .env file.")
+            elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                logger.error("Gemini Quota Exhausted on all models.")
+            else:
+                logger.error("Gemini evaluation failed after multiple attempts: %s", error_msg)
+            
             return {city: {"risk_score": 0.05, "primary_hazard": "Analysis Failed"}
                     for city in city_headlines}
 
