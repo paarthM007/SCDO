@@ -24,7 +24,7 @@ _NODE_CACHE = {}
 def _get_node_coords(name):
     if not _NODE_CACHE:
         for node in get_all_nodes():
-            _NODE_CACHE[node[0].lower()] = (node[1], node[2])
+            _NODE_CACHE[node["name"].lower()] = (node["lat"], node["lon"])
     return _NODE_CACHE.get(name.lower(), (0, 0))
 
 class TransportLink:
