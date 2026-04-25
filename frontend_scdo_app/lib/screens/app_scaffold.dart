@@ -7,6 +7,7 @@ import 'package:scdo_app/screens/route_comparison_screen.dart';
 import 'package:scdo_app/screens/history_screen.dart';
 import 'package:scdo_app/screens/profile_screen.dart';
 import 'package:scdo_app/screens/search_profiles_screen.dart';
+import 'package:scdo_app/screens/alt_route_screen.dart';
 import 'package:scdo_app/orchestrator_page.dart';
 
 class AppScaffold extends StatefulWidget {
@@ -23,6 +24,7 @@ class _AppScaffoldState extends State<AppScaffold> {
 
   final List<String> _titles = [
     'Route Simulator',
+    'Alt Route Discovery',
     'Multi-Supplier Routes',
     'Route Comparison',
     'Simulation History',
@@ -33,11 +35,12 @@ class _AppScaffoldState extends State<AppScaffold> {
 
   List<Widget> get _screens => [
     const DashboardScreen(),
+    const AltRouteScreen(),
     SupplyRoutesScreen(
       onResultsReady: (data) {
         setState(() {
           _multiSupplierData = data;
-          _selectedIndex = 2;
+          _selectedIndex = 3;
         });
         _comparisonKey.currentState?.updateData(data);
       },
@@ -68,8 +71,10 @@ class _AppScaffoldState extends State<AppScaffold> {
           : _screens[_selectedIndex],
       bottomNavigationBar: isDesktop ? null : BottomNavigationBar(
         currentIndex: _selectedIndex, onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.route), label: 'Routes'),
+          BottomNavigationBarItem(icon: Icon(Icons.alt_route), label: 'Alt'),
           BottomNavigationBarItem(icon: Icon(Icons.hub), label: 'Suppliers'),
           BottomNavigationBarItem(icon: Icon(Icons.compare_arrows), label: 'Compare'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
@@ -108,14 +113,15 @@ class _AppScaffoldState extends State<AppScaffold> {
       const SizedBox(height: 48),
       _navDivider("ROUTING"),
       _navItem(Icons.route, 'Route Simulator', 0, "Single origin → destination"),
-      _navItem(Icons.hub, 'Multi-Supplier', 1, "Compare multiple suppliers"),
-      _navItem(Icons.compare_arrows, 'Comparison', 2, "Side-by-side analysis"),
+      _navItem(Icons.alt_route, 'Alt Route', 1, "Constraint-aware discovery"),
+      _navItem(Icons.hub, 'Multi-Supplier', 2, "Compare multiple suppliers"),
+      _navItem(Icons.compare_arrows, 'Comparison', 3, "Side-by-side analysis"),
       _navDivider("ANALYTICS"),
-      _navItem(Icons.history, 'History', 3, "Past simulation results"),
-      _navItem(Icons.people, 'Community', 4, "User profiles & ratings"),
-      _navItem(Icons.person, 'My Profile', 5, "Your account"),
+      _navItem(Icons.history, 'History', 4, "Past simulation results"),
+      _navItem(Icons.people, 'Community', 5, "User profiles & ratings"),
+      _navItem(Icons.person, 'My Profile', 6, "Your account"),
       _navDivider("LIVE"),
-      _navItem(Icons.radar, 'Live Orchestrator', 6, "Real-time shipment control"),
+      _navItem(Icons.radar, 'Live Orchestrator', 7, "Real-time shipment control"),
     ]));
   }
 

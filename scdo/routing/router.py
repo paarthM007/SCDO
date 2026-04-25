@@ -208,7 +208,7 @@ def find_route(origin, destination, mode_pref="BEST",
             graph, src_id, dst_id, allowed, objective, blocked_ids,
             quantity=quantity, product_type=product_type,
             risk_score=risk_score, omega=omega, max_budget=max_budget,
-            cargo_type=cargo_type
+            deadline_h=deadline_h, cargo_type=cargo_type
         )
     except ValueError as e:
         return {"error": str(e)}
