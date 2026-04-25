@@ -1,5 +1,7 @@
 """
-monte_carlo.py - MC runner, statistics, and SimulationQueue from DES.py.
+monte_carlo.py - MC runner with CTR-synchronized formulas.
+SCDO Logistics Engine v3.0: Uses identical cost/time models as the Router,
+adding Gaussian noise (σ) for real-world variance simulation.
 """
 import simpy
 import random
@@ -15,6 +17,12 @@ from scdo.simulation.entities import Shipment, to_native
 from scdo.simulation.nodes import Node, FacilityClearance
 from scdo.simulation.links import TransportLink
 from scdo.simulation.route_builder import build_route_with_nodes
+from scdo.config import (
+    ALPHA_COST_PENALTY, BETA_DELAY_COEFF,
+    SPEED_CONSTANTS, VARIABLE_RATE, FIXED_OVERHEAD,
+    PROCESSING_TIME, DEFAULT_PRODUCT_TYPE,
+)
+from scdo.routing.cities_data import get_waypoints_by_names
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +30,51 @@ logger = logging.getLogger(__name__)
 RISK_DELAY_SCALE = 1.0
 RISK_COST_SCALE = 0.6
 
+# ── v3.0: Gaussian noise parameters for MC stochastic simulation ──
+# These σ values are added to base CTR calculations to model real-world variance.
+NOISE_SIGMA = {
+    "cost_fraction": 0.08,   # ±8% cost variance
+    "time_fraction": 0.12,   # ±12% time variance
+    "risk_sigma":    0.05,   # ±0.05 risk score jitter
+}
+
+
+def _apply_gaussian_noise(base_value: float, sigma_fraction: float) -> float:
+    """Apply Gaussian noise to a base value. Ensures result stays positive."""
+    noise = random.gauss(0, base_value * sigma_fraction) if base_value > 0 else 0
+    return max(0.01, base_value + noise)
+
 
 def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                     importance_boost=1.0, facility_configs=None, gmaps=None,
-                    combined_risk_score=0.0):
+                    combined_risk_score=0.0,
+                    product_type=None, path_edges=None):
     """
     Runs DES N times using pure Monte Carlo + importance sampling.
-    Combined risk scales delays/costs proportionally.
+    
+    v3.0: Combined risk scales delays/costs using the SAME CTR formulas
+    as the Router (compute_edge_cost / compute_edge_time), but with
+    Gaussian noise (σ) added to model real-world stochastic variance.
     """
     random.seed(seed)
     np.random.seed(seed)
 
-    delay_multiplier = 1.0 + RISK_DELAY_SCALE * combined_risk_score
-    cost_multiplier = 1.0 + RISK_COST_SCALE * combined_risk_score
+    pt = product_type or DEFAULT_PRODUCT_TYPE
+
+    # CTR-synchronized risk multipliers
+    delay_multiplier = 1.0 + BETA_DELAY_COEFF * combined_risk_score
+    cost_multiplier = 1.0 + ALPHA_COST_PENALTY * combined_risk_score
+
+    # Also maintain legacy multipliers for backward compat
+    legacy_delay = 1.0 + RISK_DELAY_SCALE * combined_risk_score
+    legacy_cost = 1.0 + RISK_COST_SCALE * combined_risk_score
 
     times, costs, weights = [], [], []
     mc_start = time.time()
 
     for i in range(n_iterations):
         env = simpy.Environment()
-        planner = build_route_with_nodes(env, locations, modes, gmaps, facility_configs)
+        planner = build_route_with_nodes(env, locations, modes, gmaps, facility_configs, path_edges=path_edges)
 
         # Inject importance boost
         if importance_boost != 1.0:
@@ -49,13 +82,25 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                 if isinstance(element, FacilityClearance):
                     element._importance_boost = importance_boost
 
-        # Inject risk multipliers
+        # ── v3.0: Apply CTR-synchronized risk multipliers with Gaussian noise ──
         if combined_risk_score > 0:
+            # Add per-iteration stochastic jitter to risk score
+            noisy_risk = max(0.0, min(1.0,
+                combined_risk_score + random.gauss(0, NOISE_SIGMA["risk_sigma"])
+            ))
+            iter_delay_mult = 1.0 + BETA_DELAY_COEFF * noisy_risk
+            iter_cost_mult = 1.0 + ALPHA_COST_PENALTY * noisy_risk
+
             for element in planner.route:
-                element._risk_delay_multiplier = delay_multiplier
-                element._risk_cost_multiplier = cost_multiplier
+                element._risk_delay_multiplier = _apply_gaussian_noise(
+                    iter_delay_mult, NOISE_SIGMA["time_fraction"]
+                )
+                element._risk_cost_multiplier = _apply_gaussian_noise(
+                    iter_cost_mult, NOISE_SIGMA["cost_fraction"]
+                )
 
         shipment = Shipment(env, f"MC-{i+1:03d}")
+        shipment.product_type = pt if pt is not None else "general"
 
         def _run(sh=shipment, rt=planner.route):
             for el in rt:
@@ -77,10 +122,22 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
         weights.append(iter_weight)
 
     mc_elapsed = time.time() - mc_start
-    logger.info(f"MC completed: {n_iterations} iterations in {mc_elapsed:.2f}s")
+    logger.info(f"MC completed: {n_iterations} iterations in {mc_elapsed:.2f}s "
+                f"(type={pt}, risk={combined_risk_score:.2f})")
 
-    return calculate_stats(times, costs, weights, n_iterations,
-                           importance_boost > 1.0)
+    stats = calculate_stats(times, costs, weights, n_iterations,
+                            importance_boost > 1.0)
+
+    # ── v3.0: Attach CTR metadata to stats ──
+    stats["ctr_params"] = {
+        "product_type": pt,
+        "risk_score": round(combined_risk_score, 4),
+        "delay_coefficient_beta": BETA_DELAY_COEFF,
+        "cost_penalty_alpha": ALPHA_COST_PENALTY,
+        "noise_sigma": NOISE_SIGMA,
+    }
+
+    return stats
 
 
 def calculate_stats(times, costs, weights, n_iterations,
@@ -135,16 +192,22 @@ def calculate_stats(times, costs, weights, n_iterations,
 
 def run_simulation_with_risk(cities, modes, cargo_type="general",
                              target_date=None, n_iterations=50, seed=42,
-                             importance_boost=1.0, facility_configs=None):
+                             importance_boost=1.0, facility_configs=None,
+                             # ── v3.0 CTR parameters ──
+                             product_type=None, path_edges=None):
     """
     Complete entry point: fetches combined risk, runs MC, returns result dict.
     Called by worker.py.
+    
+    v3.0: Forwards product_type to Monte Carlo engine for
+    CTR-synchronized stochastic simulation.
     """
     from scdo.risk.combined_risk import compute_combined_risk
     from datetime import datetime, timezone
 
     logger.info("=== run_simulation_with_risk ===")
-    logger.info("  Cities: %s, Modes: %s", cities, modes)
+    logger.info("  Cities: %s, Modes: %s, Type=%s",
+                cities, modes, product_type)
 
     # Step 1: Compute combined risk
     try:
@@ -155,13 +218,15 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
         risk_result = {"combined_risk_score": 0.0, "risk_level": "UNKNOWN", "error": str(e)}
         combined_risk_score = 0.0
 
-    # Step 2: Run Monte Carlo
+    # Step 2: Run Monte Carlo with CTR parameters
     sim_stats = monte_carlo_des(
         locations=cities, modes=modes,
         n_iterations=n_iterations, seed=seed,
         importance_boost=importance_boost,
         facility_configs=facility_configs,
         combined_risk_score=combined_risk_score,
+        product_type=product_type,
+        path_edges=path_edges,
     )
 
     # Step 3: Assemble result
@@ -170,6 +235,7 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
             "cities": cities, "modes": modes,
             "cargo_type": cargo_type, "target_date": target_date,
             "n_iterations": n_iterations, "seed": seed,
+            "product_type": product_type or cargo_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
         "combined_risk": {
@@ -179,8 +245,11 @@ def run_simulation_with_risk(cities, modes, cargo_type="general",
             "recommendation": risk_result.get("recommendation", ""),
             "weather_risk": risk_result.get("weather_risk", {}),
             "sentiment_risk": risk_result.get("sentiment_risk", {}),
+            "community_risk": risk_result.get("community_risk", {}),
         },
         "simulation_stats": sim_stats,
+        "waypoints": get_waypoints_by_names(cities),
+        "path_edges": path_edges,
     })
 
     logger.info("=== Simulation complete ===")
@@ -201,6 +270,8 @@ def _run_mc_job(job_config):
             seed=job_config.get("seed", 42),
             importance_boost=job_config.get("importance_boost", 1.0),
             facility_configs=job_config.get("facility_configs"),
+            product_type=job_config.get("product_type"),
+            path_edges=job_config.get("path_edges"),
         )
         return {"job_id": job_id, "status": "done", "result": result, "error": None}
     except Exception as e:

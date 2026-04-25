@@ -7,9 +7,17 @@ from typing import Optional
 from scdo.simulation.entities import get_lognormal_params
 
 class Node:
-    def __init__(self, env, name):
+    def __init__(self, env, name, capabilities=None):
         self.env = env
         self.name = name
+        self.capabilities = capabilities or ["GENERAL"]
+        
+        # Consult CrisisManager for active risk multipliers
+        from scdo.simulation.crisis_manager import CrisisManager
+        cm = CrisisManager()
+        if self.name in cm.active_risk_multipliers:
+            self._risk_delay_multiplier = cm.active_risk_multipliers[self.name]
+
     def _scale_delay(self, delay):
         return delay * getattr(self, '_risk_delay_multiplier', 1.0)
     def _scale_cost(self, cost):
@@ -111,97 +119,97 @@ class FacilityClearance(Node):
         shipment.record(f"{self.name} ({self.direction})", total_delay, cost)
 
 class SeaportClearance(FacilityClearance):
-    def __init__(self, env, name, direction="import", fixed_cost=500.0, hourly_rate=30.0):
+    def __init__(self, env, name, direction="import", fixed_cost=250.0, hourly_rate=15.0):
         if direction == "import":
             stages = [
-                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 68.6, "sigma": 17.15}},
-                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 23.53, "high": 113.88}},
-                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 52.45}},
-                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 66.63, "std": 23.32}},
+                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 12.0, "sigma": 4.0}},
+                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 4.0, "high": 24.0}},
+                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 8.0}},
+                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 12.0, "std": 6.0}},
             ]
             triggers = [
-                {"name": "Amendment", "probability": 0.27, "mode": "additive", "hours": 17.98},
-                {"name": "OnHold", "probability": 0.10, "mode": "additive", "hours": 48.0},
+                {"name": "Amendment", "probability": 0.15, "mode": "additive", "hours": 8.0},
+                {"name": "OnHold", "probability": 0.05, "mode": "additive", "hours": 24.0},
             ]
         else:
             stages = [
-                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 47.38}},
-                {"name": "LEO->Shipping", "distribution": "triangular", "params": {"low": 30.78, "mode": 41.05, "high": 61.57}},
+                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 12.0}},
+                {"name": "LEO->Shipping", "distribution": "triangular", "params": {"low": 6.0, "mode": 12.0, "high": 24.0}},
             ]
             triggers = []
         super().__init__(env, name, direction, stages, triggers, fixed_cost, hourly_rate)
 
 class AirCargoClearance(FacilityClearance):
-    def __init__(self, env, name, direction="import", bill_type=None, fixed_cost=300.0, hourly_rate=25.0):
+    def __init__(self, env, name, direction="import", bill_type=None, fixed_cost=150.0, hourly_rate=12.0):
         if direction == "import":
             stages = [
-                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 56.80, "sigma": 14.20}},
-                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 22.05, "high": 59.17}},
-                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 32.35}},
-                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 30.83, "std": 10.79}},
+                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 6.0, "sigma": 2.0}},
+                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 2.0, "high": 8.0}},
+                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 4.0}},
+                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 4.0, "std": 2.0}},
             ]
-            triggers = [{"name": "Amendment", "probability": 0.27, "mode": "additive", "hours": 17.98}]
+            triggers = [{"name": "Amendment", "probability": 0.15, "mode": "additive", "hours": 6.0}]
         else:
             stages = [
-                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 25.43}},
-                {"name": "LEO->Departure", "distribution": "triangular", "params": {"low": 12.95, "mode": 16.18, "high": 24.27}},
+                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 4.0}},
+                {"name": "LEO->Departure", "distribution": "triangular", "params": {"low": 2.0, "mode": 4.0, "high": 8.0}},
             ]
             triggers = []
-            if bill_type == "SB": triggers.append({"name": "SB", "probability": 1.0, "mode": "swap", "hours": 82.43})
-            elif bill_type == "CS": triggers.append({"name": "CS", "probability": 1.0, "mode": "swap", "hours": 35.40})
+            if bill_type == "SB": triggers.append({"name": "SB", "probability": 1.0, "mode": "swap", "hours": 12.0})
+            elif bill_type == "CS": triggers.append({"name": "CS", "probability": 1.0, "mode": "swap", "hours": 6.0})
         super().__init__(env, name, direction, stages, triggers, fixed_cost, hourly_rate)
         self.bill_type = bill_type
 
 class ICPClearance(FacilityClearance):
     def __init__(self, env, name, direction="import", advance_filed=False,
-                 late_facilitated=False, is_aeo=None, fixed_cost=200.0, hourly_rate=15.0):
+                 late_facilitated=False, is_aeo=None, fixed_cost=100.0, hourly_rate=10.0):
         triggers = []
         if direction == "import":
             stages = [
-                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 7.15, "sigma": 6.06}},
-                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 3.47, "high": 27.47}},
-                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 11.67}},
-                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 6.85, "std": 4.80}},
+                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 2.0, "sigma": 1.0}},
+                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 1.0, "high": 4.0}},
+                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 2.0}},
+                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 2.0, "std": 1.0}},
             ]
-            if advance_filed: triggers.append({"name": "AdvanceFiled", "probability": 1.0, "mode": "swap", "hours": 18.78})
-            elif late_facilitated: triggers.append({"name": "LateFacilitated", "probability": 1.0, "mode": "swap", "hours": 11.47})
+            if advance_filed: triggers.append({"name": "AdvanceFiled", "probability": 1.0, "mode": "swap", "hours": 4.0})
+            elif late_facilitated: triggers.append({"name": "LateFacilitated", "probability": 1.0, "mode": "swap", "hours": 3.0})
         else:
             stages = [
-                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 6.17}},
-                {"name": "LEO->Departure", "distribution": "triangular", "params": {"low": 6.22, "mode": 8.88, "high": 13.33}},
+                {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 2.0}},
+                {"name": "LEO->Departure", "distribution": "triangular", "params": {"low": 1.0, "mode": 2.0, "high": 4.0}},
             ]
-            if is_aeo is True: triggers.append({"name": "AEO=True", "probability": 1.0, "mode": "swap", "hours": 19.95})
-            elif is_aeo is False: triggers.append({"name": "AEO=False", "probability": 1.0, "mode": "swap", "hours": 14.02})
+            if is_aeo is True: triggers.append({"name": "AEO=True", "probability": 1.0, "mode": "swap", "hours": 4.0})
+            elif is_aeo is False: triggers.append({"name": "AEO=False", "probability": 1.0, "mode": "swap", "hours": 6.0})
         super().__init__(env, name, direction, stages, triggers, fixed_cost, hourly_rate)
 
 class ICDClearance(FacilityClearance):
     def __init__(self, env, name, direction="import", container_load=None,
-                 stuffing_loc=None, fixed_cost=400.0, hourly_rate=20.0):
+                 stuffing_loc=None, fixed_cost=200.0, hourly_rate=15.0):
         if direction == "import":
             stages = [
-                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 100.35, "sigma": 25.09}},
-                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 45.62, "high": 106.45}},
-                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 89.45}},
-                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 84.83, "std": 29.69}},
+                {"name": "Arrival->Assessment", "distribution": "normal", "params": {"mu": 12.0, "sigma": 4.0}},
+                {"name": "Assessment->Payment", "distribution": "uniform", "params": {"low": 4.0, "high": 12.0}},
+                {"name": "Payment->OOC", "distribution": "exponential", "params": {"mean": 8.0}},
+                {"name": "OOC->GateOut", "distribution": "lognormal", "params": {"mean": 12.0, "std": 6.0}},
             ]
-            triggers = [{"name": "Amendment", "probability": 0.27, "mode": "additive", "hours": 17.98}]
+            triggers = [{"name": "Amendment", "probability": 0.15, "mode": "additive", "hours": 6.0}]
         else:
             triggers = []
             if stuffing_loc == "factory":
                 stages = [
-                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 20.0}},
-                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 51.45, "mode": 70.93, "high": 90.40}},
+                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 4.0}},
+                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 8.0, "mode": 12.0, "high": 16.0}},
                 ]
             elif stuffing_loc == "icd":
                 stages = [
-                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 30.65}},
-                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 78.47, "mode": 104.91, "high": 131.37}},
+                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 6.0}},
+                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 10.0, "mode": 16.0, "high": 24.0}},
                 ]
             else:
                 stages = [
-                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 30.65}},
-                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 69.90, "mode": 99.85, "high": 149.78}},
+                    {"name": "Arrival->LEO", "distribution": "exponential", "params": {"mean": 6.0}},
+                    {"name": "LEO->RakeLoading", "distribution": "triangular", "params": {"low": 8.0, "mode": 14.0, "high": 24.0}},
                 ]
-            if container_load == "FCL": triggers.append({"name": "FCL", "probability": 1.0, "mode": "swap", "hours": 127.07})
-            elif container_load == "LCL": triggers.append({"name": "LCL", "probability": 1.0, "mode": "swap", "hours": 155.08})
+            if container_load == "FCL": triggers.append({"name": "FCL", "probability": 1.0, "mode": "swap", "hours": 20.0})
+            elif container_load == "LCL": triggers.append({"name": "LCL", "probability": 1.0, "mode": "swap", "hours": 24.0})
         super().__init__(env, name, direction, stages, triggers, fixed_cost, hourly_rate)

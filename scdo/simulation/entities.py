@@ -9,6 +9,7 @@ class Shipment:
         self.shipment_id = shipment_id
         self.log = []
         self.total_cost = 0.0
+        self.product_type = "general"
 
     def record(self, activity: str, delay: float, cost: float):
         start_time = self.env.now - delay

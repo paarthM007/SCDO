@@ -1,9 +1,6 @@
-import os
 import time
-import json
 import logging
 from google.cloud import firestore
-from google.oauth2 import service_account
 from scdo.db import get_db
 from scdo.config import FIRESTORE_COLLECTION
 from scdo.simulation.monte_carlo import run_simulation_with_risk
@@ -22,6 +19,8 @@ def claim_job(transaction, doc_ref):
         return True
     return False
 
+import traceback
+
 def process_job(doc_id, data):
     db = get_db()
     doc_ref = db.collection(FIRESTORE_COLLECTION).document(doc_id)
@@ -37,13 +36,22 @@ def process_job(doc_id, data):
             cities=data.get("cities", []),
             modes=data.get("modes", []),
             cargo_type=data.get("cargo_type", "general"),
-            n_iterations=data.get("n_iterations", 50)
+            n_iterations=data.get("n_iterations", 50),
+            # v3.0 CTR parameters
+            product_type=data.get("product_type"),
+            path_edges=data.get("path_edges"),
         )
         doc_ref.update({"status": "completed", "result": result, "completed_at": firestore.SERVER_TIMESTAMP})
         logger.info(f"Job {doc_id} completed successfully.")
     except Exception as e:
-        logger.error(f"Job {doc_id} failed: {e}")
-        doc_ref.update({"status": "failed", "error": str(e), "failed_at": firestore.SERVER_TIMESTAMP})
+        err_stack = traceback.format_exc()
+        logger.error(f"Job {doc_id} failed: {e}\n{err_stack}")
+        doc_ref.update({
+            "status": "failed", 
+            "error": str(e), 
+            "traceback": err_stack,
+            "failed_at": firestore.SERVER_TIMESTAMP
+        })
 
 def start_listener():
     db = get_db()
@@ -56,7 +64,8 @@ def start_listener():
                     process_job(change.document.id, data)
     
     # Use a query to listen for pending jobs
-    col_query = db.collection(FIRESTORE_COLLECTION).where("status", "==", "pending")
+    from google.cloud.firestore import FieldFilter
+    col_query = db.collection(FIRESTORE_COLLECTION).where(filter=FieldFilter("status", "==", "pending"))
     col_query.on_snapshot(on_snapshot)
     
     while True:

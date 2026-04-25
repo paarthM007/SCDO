@@ -7,6 +7,40 @@ India: all ~766 districts | World: ~400 major cities / ports / airports
 # is_port  → can transfer to SEA routes
 # is_airport → can transfer to AIR routes
 
+# The specific capabilities each major hub has for specialized logistics.
+NODE_CAPABILITIES = {
+    "Mumbai": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT", "SECURE_TRANSIT"],
+    "New Delhi": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Hyderabad": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HAZMAT_CERT"],
+    "Bengaluru": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE"],
+    "Chennai": ["GENERAL", "COLD_CHAIN", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Mundra": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT", "COLD_CHAIN"],
+    "Kolkata": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Singapore": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Shanghai": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Hong Kong": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HAZMAT_CERT"],
+    "Dubai": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Busan": ["GENERAL", "COLD_CHAIN", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Tokyo": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HAZMAT_CERT"],
+    "Shenzhen": ["GENERAL", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Port Klang": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Rotterdam": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Antwerp": ["GENERAL", "COLD_CHAIN", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Hamburg": ["GENERAL", "COLD_CHAIN", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Frankfurt": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HAZMAT_CERT"],
+    "Paris": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE"],
+    "London": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT"],
+    "Felixstowe": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "New York": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Los Angeles": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Chicago": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT"],
+    "Houston": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Savannah": ["GENERAL", "HEAVY_LIFT", "HAZMAT_CERT"],
+    "Memphis": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE", "HEAVY_LIFT"],
+    "Miami": ["GENERAL", "COLD_CHAIN", "SECURE_STORAGE"],
+    "Seattle": ["GENERAL", "COLD_CHAIN", "HEAVY_LIFT"]
+}
+
 INDIA_DISTRICTS = [
     # ── Andhra Pradesh ─────────────────────────────────────────
     ("Visakhapatnam",   17.69, 83.22, "Andhra Pradesh",  True,  True),
@@ -1231,6 +1265,7 @@ def get_all_nodes():
             "is_port":    entry[4],
             "is_airport": entry[5],
             "country":    "India" if entry[3] in INDIA_STATES else entry[3],
+            "capabilities": NODE_CAPABILITIES.get(name, ["GENERAL"])
         })
     return nodes
 
@@ -1244,3 +1279,18 @@ INDIA_STATES = {
     "Delhi","J&K","Ladakh","Puducherry","Dadra & NH","Daman & Diu",
     "Lakshadweep","Andaman & Nicobar",
 }
+
+def get_waypoints_by_names(names):
+    """Retrieve full waypoint objects for a list of city names."""
+    all_nodes = get_all_nodes()
+    name_map = {n["name"].lower(): n for n in all_nodes}
+    
+    results = []
+    for name in names:
+        n = name_map.get(name.lower())
+        if n:
+            results.append(n)
+        else:
+            # Fallback if city not found
+            results.append({"name": name, "lat": 0, "lon": 0})
+    return results

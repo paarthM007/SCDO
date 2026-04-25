@@ -16,20 +16,30 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
     db = get_db()
     query = db.collection(FIRESTORE_COLLECTION)
 
+    from google.cloud.firestore import FieldFilter
     if user_id:
-        query = query.where("user_id", "==", user_id)
+        query = query.where(filter=FieldFilter("user_id", "==", user_id))
         
     query = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
     ).limit(limit)
 
     if status_filter:
-        query = query.where("status", "==", status_filter)
+        query = query.where(filter=FieldFilter("status", "==", status_filter))
 
     docs = query.stream()
     jobs = []
+    now = datetime.now(timezone.utc)
     for doc in docs:
         d = doc.to_dict()
+        
+        # Soft Delete: Skip if the record has expired
+        expires_at = d.get("expires_at")
+        if expires_at:
+            # Firestore timestamps are returned as datetime objects
+            if expires_at.replace(tzinfo=timezone.utc) < now:
+                continue
+
         d["job_id"] = doc.id
         # Strip heavy fields for listing
         if "result" in d and isinstance(d["result"], dict):
@@ -40,6 +50,10 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
                 "risk_score": d["result"].get("combined_risk", {}).get("score"),
                 "risk_level": d["result"].get("combined_risk", {}).get("level"),
             }
+            # Preserve geographic data for History Graph visualization
+            d["waypoints"] = d["result"].get("waypoints", [])
+            d["path_edges"] = d["result"].get("path_edges", [])
+            
             del d["result"]  # Don't send full result in listing
         jobs.append(d)
     return jobs
@@ -49,10 +63,10 @@ def compute_analytics(limit=200, user_id=None):
     """Aggregate analytics over recent completed jobs."""
     db = get_db()
     query = db.collection(FIRESTORE_COLLECTION).where(
-        "status", "==", "completed"
+        filter=FieldFilter("status", "==", "completed")
     )
     if user_id:
-        query = query.where("user_id", "==", user_id)
+        query = query.where(filter=FieldFilter("user_id", "==", user_id))
         
     docs = query.order_by(
         "created_at", direction=firestore.Query.DESCENDING
@@ -67,6 +81,12 @@ def compute_analytics(limit=200, user_id=None):
 
     for doc in docs:
         d = doc.to_dict()
+        
+        # Soft Delete: Skip if the record has expired
+        expires_at = d.get("expires_at")
+        if expires_at and expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            continue
+
         total_jobs += 1
 
         # Count routes
