@@ -575,6 +575,7 @@ def api_cities():
     q = request.args.get("q", "")
     return jsonify({"cities": list_cities(q)})
 
+@app.route("/dispatch", methods=["POST"])
 @app.route("/api/dispatch", methods=["POST"])
 def api_dispatch():
     data = request.json or {}
@@ -614,6 +615,7 @@ def api_dispatch():
         "status": "DISPATCHED"
     })
 
+@app.route("/tick", methods=["POST"])
 @app.route("/api/tick", methods=["POST"])
 def api_tick():
     data = request.json or {}
