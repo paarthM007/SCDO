@@ -10,9 +10,13 @@ logger = logging.getLogger(__name__)
 
 class NodeStep:
     """Represents a physical location (port, airport, warehouse) in the route plan."""
-    def __init__(self, name: str):
+    # Default processing/dwell time at each node.
+    # This prevents the tick() while-loop from spinning infinitely on 0-duration steps.
+    DEFAULT_NODE_DWELL_H = 2.0
+
+    def __init__(self, name: str, dwell_h: float = DEFAULT_NODE_DWELL_H):
         self.name = name
-        self.time_h = 0.0  # Processing time is bundled into transport edges for now, so Node time is 0.
+        self.time_h = dwell_h  # Processing time at this node (hours).
 
     def __repr__(self):
         return f"NodeStep({self.name})"

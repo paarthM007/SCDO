@@ -633,6 +633,23 @@ def api_tick():
 
     shipments_data = []
     for s_id, shipment in orchestrator.active_shipments.items():
+        fresh_logs = list(shipment.decision_logs)
+        shipment.decision_logs.clear()
+
+        # Guard: index is out of range once status is DELIVERED
+        if shipment.status == 'DELIVERED' or shipment.current_step_index >= len(shipment.route_plan):
+            route_names = [step.name for step in shipment.route_plan if isinstance(step, NodeStep)]
+            shipments_data.append({
+                "shipment_id": shipment.shipment_id,
+                "status": "DELIVERED",
+                "current_step_name": route_names[-1] if route_names else "Unknown",
+                "next_step_name": "Delivered",
+                "progress_percentage": 1.0,
+                "route_plan": route_names,
+                "fresh_logs": fresh_logs
+            })
+            continue
+
         current_step = shipment.route_plan[shipment.current_step_index]
         
         if isinstance(current_step, NodeStep):
@@ -642,12 +659,10 @@ def api_tick():
             curr_name = f"Transit to {current_step.to_node}"
             next_name = current_step.to_node
 
-        progress_pct = shipment.progress_on_step / max(0.001, current_step.time_h) if current_step.time_h > 0 else 1.0
+        progress_pct = shipment.progress_on_step / current_step.time_h if current_step.time_h > 0 else 1.0
+        progress_pct = min(progress_pct, 1.0)  # clamp to 100%
         
         route_names = [step.name for step in shipment.route_plan if isinstance(step, NodeStep)]
-                
-        fresh_logs = list(shipment.decision_logs)
-        shipment.decision_logs.clear()
 
         shipments_data.append({
             "shipment_id": shipment.shipment_id,
@@ -658,6 +673,7 @@ def api_tick():
             "route_plan": route_names,
             "fresh_logs": fresh_logs
         })
+
 
     active_crises = list(crises_after)
     
