@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/route_graph_painter.dart';
 import '../app_config.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateMixin {
   final String baseUrl = AppConfig.gatewayBaseUrl;
   final String apiKey = AppConfig.gatewayApiKey;
 
@@ -147,12 +148,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
 
       if (response.statusCode == 200) {
-        // In Flutter Web, we can trigger a download by creating an anchor element.
-        // Web approach using universal_html
         final blob = html.Blob([response.bodyBytes], 'application/pdf');
         final url = html.Url.createObjectUrlFromBlob(blob);
         final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", "scdo_report_${job['id']}.pdf")
+          ..setAttribute("download", "scdo_report_${job['job_id']}.pdf")
           ..click();
         html.Url.revokeObjectUrl(url);
 
@@ -171,7 +170,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  // ── Feedback dialog for community risk reporting ────────────
   void _showFeedbackDialog(Map<String, dynamic> job) {
     List<String> cities = List<String>.from(job['cities'] ?? []);
     if (cities.isEmpty) return;
@@ -186,9 +184,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return AlertDialog(
               backgroundColor: GlassTheme.backgroundCard,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(children: [
+              title: const Row(children: [
                 Icon(Icons.feedback, color: Colors.amberAccent),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Text("Rate City Risks", style: TextStyle(color: Colors.amberAccent)),
               ]),
               content: SizedBox(
@@ -300,6 +298,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _showGraphDialog(Map<String, dynamic> job) {
+    if (job['status'] != 'completed') return;
+    showDialog(
+      context: context,
+      builder: (ctx) => _AnimatedGraphDialog(graphData: job),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -338,65 +344,68 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               final isCompleted = status == 'completed';
                               final cities = job['cities'] as List?;
                               
-                              return GlassContainer(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: isCompleted ? GlassTheme.accentNeonGreen : Colors.orange,
+                              return GestureDetector(
+                                onTap: isCompleted ? () => _showGraphDialog(job) : null,
+                                child: GlassContainer(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            width: 12,
+                                            height: 12,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: isCompleted ? GlassTheme.accentNeonGreen : Colors.orange,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                cities != null ? cities.join(' → ') : "Job ID: ${job['job_id']}",
-                                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                "Status: ${status.toUpperCase()}",
-                                                style: TextStyle(
-                                                  color: GlassTheme.textSecondary,
-                                                  fontSize: 12,
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  cities != null ? cities.join(' → ') : "Job ID: ${job['job_id']}",
+                                                  style: const TextStyle(fontWeight: FontWeight.bold),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  "Status: ${status.toUpperCase()}",
+                                                  style: TextStyle(
+                                                    color: GlassTheme.textSecondary,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        if (isCompleted) ...[
+                                          if (isCompleted) ...[
+                                            IconButton(
+                                              icon: const Icon(Icons.picture_as_pdf, color: GlassTheme.accentCyan, size: 22),
+                                              tooltip: "Download PDF Report",
+                                              onPressed: () => _downloadReport(job),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
+                                              tooltip: "Rate city risks",
+                                              onPressed: () => _showFeedbackDialog(job),
+                                            ),
+                                          ],
                                           IconButton(
-                                            icon: const Icon(Icons.picture_as_pdf, color: GlassTheme.accentCyan, size: 22),
-                                            tooltip: "Download PDF Report",
-                                            onPressed: () => _downloadReport(job),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
-                                            tooltip: "Rate city risks",
-                                            onPressed: () => _showFeedbackDialog(job),
+                                            icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
+                                            onPressed: () => _deleteJob(job['job_id']),
+                                            tooltip: 'Delete Job',
                                           ),
                                         ],
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: GlassTheme.danger),
-                                          onPressed: () => _deleteJob(job['job_id']),
-                                          tooltip: 'Delete Job',
-                                        ),
+                                      ),
+                                      if (isCompleted && job['summary'] != null) ...[
+                                        const Divider(color: Colors.white12, height: 24),
+                                        _buildSummaryGrid(job['summary']),
                                       ],
-                                    ),
-                                    if (isCompleted && job['summary'] != null) ...[
-                                      const Divider(color: Colors.white12, height: 24),
-                                      _buildSummaryGrid(job['summary']),
                                     ],
-                                  ],
+                                  ),
                                 ),
                               );
                             },
@@ -406,6 +415,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
     );
   }
+
   Widget _buildSummaryGrid(Map<String, dynamic> summary) {
     final riskLevel = summary['risk_level'] ?? 'Unknown';
     Color riskColor = GlassTheme.accentNeonGreen;
@@ -443,6 +453,97 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AnimatedGraphDialog extends StatefulWidget {
+  final Map<String, dynamic> graphData;
+  const _AnimatedGraphDialog({required this.graphData});
+
+  @override
+  State<_AnimatedGraphDialog> createState() => _AnimatedGraphDialogState();
+}
+
+class _AnimatedGraphDialogState extends State<_AnimatedGraphDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(40),
+      child: GlassContainer(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.auto_graph, color: GlassTheme.accentCyan),
+                const SizedBox(width: 12),
+                Text(
+                  "Route Path Analysis",
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white54),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    return InteractiveRouteGraph(
+                      routeData: widget.graphData,
+                      shipmentProgress: _controller.value,
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _controller.forward(from: 0),
+                  icon: const Icon(Icons.replay),
+                  label: const Text("Replay Animation"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: GlassTheme.accentCyan.withOpacity(0.2),
+                    foregroundColor: GlassTheme.accentCyan,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
