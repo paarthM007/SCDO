@@ -16,15 +16,16 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final String baseUrl = AppConfig.gatewayBaseUrl;
 
-  final TextEditingController _originController = TextEditingController(text: "Mumbai");
-  final TextEditingController _destinationController = TextEditingController(text: "Delhi");
+  List<TextEditingController> _cityControllers = [
+    TextEditingController(text: "Mumbai"),
+    TextEditingController(text: "London"),
+  ];
+  List<String> _modes = ["ship"];
+
   String _cargoType = "general";
 
-  bool _isLoadingRoute = false;
   bool _isLoadingSim = false;
   String _statusMessage = "";
-  Map<String, dynamic>? _routeResult;
-  String? _selectedRouteKey;
 
   // Simulation result tracking
   String? _simJobId;
@@ -41,76 +42,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return {"Authorization": "Bearer $token", "Content-Type": "application/json"};
   }
 
-  // Step 1: Find route options
-  Future<void> _findRoutes() async {
-    final origin = _originController.text.trim();
-    final dest = _destinationController.text.trim();
-    if (origin.isEmpty || dest.isEmpty) {
-      setState(() => _statusMessage = "❌ Please enter both origin and destination cities.");
+  void _addWaypoint() {
+    setState(() {
+      _cityControllers.insert(_cityControllers.length - 1, TextEditingController(text: ""));
+      _modes.add("road");
+    });
+  }
+
+  void _removeWaypoint(int index) {
+    if (_cityControllers.length <= 2) return;
+    setState(() {
+      _cityControllers.removeAt(index);
+      if (index == _cityControllers.length) {
+        _modes.removeLast();
+      } else {
+        _modes.removeAt(index);
+      }
+    });
+  }
+
+  Future<void> _simulateManualRoute() async {
+    List<String> cities = _cityControllers.map((c) => c.text.trim()).toList();
+    if (cities.any((c) => c.isEmpty)) {
+      setState(() => _statusMessage = "❌ Please fill in all city names.");
       return;
     }
 
-    setState(() { _isLoadingRoute = true; _statusMessage = "🔍 Finding best routes from $origin to $dest..."; _routeResult = null; _selectedRouteKey = null; });
+    setState(() {
+      _isLoadingSim = true;
+      _simResult = null;
+      _statusMessage = "⚙️ Running Monte Carlo simulation on custom route...";
+    });
 
     try {
-      final response = await http.post(
-        Uri.parse("$baseUrl/api/alternate-route"),
-        headers: await _authHeaders(),
-        body: jsonEncode({"start": origin, "end": dest, "blocked": [], "cargo_type": _cargoType}),
-      );
-
-      if (response.statusCode == 200) {
-        var body = jsonDecode(response.body);
-        var decoded = body["result"] ?? body;
-        setState(() { _routeResult = decoded; _statusMessage = "✅ Found route options! Select one to simulate."; });
-      } else {
-        setState(() => _statusMessage = "❌ Server error: ${response.statusCode}");
-      }
-    } catch (e) {
-      setState(() => _statusMessage = "❌ Network Error: $e");
-    } finally {
-      setState(() => _isLoadingRoute = false);
-    }
-  }
-
-  // Step 2: Simulate a specific path
-  Future<void> _simulatePath(String routeKey) async {
-    final routeData = _routeResult?[routeKey];
-    if (routeData == null || routeData.containsKey("error")) return;
-
-    setState(() { _isLoadingSim = true; _simResult = null; _statusMessage = "⚙️ Running Monte Carlo simulation on ${routeKey.toUpperCase()} route..."; });
-
-    try {
-      final waypoints = routeData["waypoints"] as List? ?? [];
-      final pathEdges = routeData["path_edges"] as List? ?? [];
-
-      List<String> cities = [];
-      List<String> modes = [];
-
-      if (waypoints.isNotEmpty) {
-        cities = waypoints.map<String>((wp) => wp["name"].toString()).toList();
-      }
-      if (pathEdges.isNotEmpty) {
-        final modeMap = {"HIGHWAY": "road", "SEA": "ship", "AIR": "air"};
-        modes = pathEdges.map<String>((e) => modeMap[e["mode"]] ?? "road").toList();
-      }
-
-      if (cities.length < 2 || modes.isEmpty) {
-        setState(() => _statusMessage = "❌ Could not extract route data for simulation.");
-        return;
-      }
-
       final response = await http.post(
         Uri.parse("$baseUrl/api/simulate"),
         headers: await _authHeaders(),
-        body: jsonEncode({"cities": cities, "modes": modes, "cargo_type": _cargoType}),
+        body: jsonEncode({
+          "cities": cities,
+          "modes": _modes,
+          "cargo_type": _cargoType,
+          "source": "manual_builder"
+        }),
       );
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         _simJobId = decoded["job_id"];
         setState(() => _statusMessage = "⏳ Simulation running... Results will appear here shortly.");
-        // Start polling for results
         _startPolling();
       } else {
         setState(() => _statusMessage = "❌ Simulation failed: ${response.statusCode}");
@@ -136,7 +115,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        final jobs = decoded["history"] as List? ?? [];
+        final jobs = decoded["jobs"] as List? ?? [];
         final job = jobs.firstWhere((j) => j["job_id"] == _simJobId, orElse: () => null);
         if (job != null && job["status"] == "completed") {
           _pollTimer?.cancel();
@@ -155,8 +134,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
-    _originController.dispose();
-    _destinationController.dispose();
+    for (var c in _cityControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -167,11 +147,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left: Input panel
           Expanded(flex: 2, child: SingleChildScrollView(child: _buildInputPanel())),
           const SizedBox(width: 32),
-          // Right: Route results
-          Expanded(flex: 3, child: _routeResult != null ? _buildRouteResults() : _buildEmptyState()),
+          Expanded(flex: 3, child: _simResult != null ? _buildSimResultCard() : _buildEmptyState()),
         ],
       ),
     );
@@ -179,36 +157,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildInputPanel() {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // Header
       Row(children: [
         Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: GlassTheme.accentNeonGreen.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.rocket_launch, color: GlassTheme.accentNeonGreen, size: 28)),
+          child: const Icon(Icons.edit_road, color: GlassTheme.accentNeonGreen, size: 28)),
         const SizedBox(width: 16),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Route Simulation', style: Theme.of(context).textTheme.headlineSmall),
+          Text('Custom Route Builder', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          Text('Enter where your shipment starts and where it needs to go.', style: Theme.of(context).textTheme.bodyMedium),
+          Text('Manually define every stop and transport mode.', style: Theme.of(context).textTheme.bodyMedium),
         ])),
       ]),
       const SizedBox(height: 28),
 
-      // Step 1: Origin
       GlassContainer(
         borderColor: GlassTheme.accentNeonGreen.withOpacity(0.3),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionLabel("STEP 1", "Where is your shipment?", Icons.flight_takeoff, GlassTheme.accentNeonGreen),
-          const SizedBox(height: 16),
-          TextField(controller: _originController, decoration: const InputDecoration(labelText: "Origin City", prefixIcon: Icon(Icons.my_location, color: GlassTheme.accentNeonGreen), hintText: "e.g. Mumbai, Shanghai, New York")),
-          const SizedBox(height: 16),
-          TextField(controller: _destinationController, decoration: const InputDecoration(labelText: "Destination City", prefixIcon: Icon(Icons.location_on, color: GlassTheme.accentCyan), hintText: "e.g. London, Tokyo, Dubai")),
+          _sectionLabel("ROUTE", "Define Cities & Modes", Icons.map, GlassTheme.accentNeonGreen),
+          const SizedBox(height: 24),
+          
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _cityControllers.length,
+            itemBuilder: (context, index) {
+              final isFirst = index == 0;
+              final isLast = index == _cityControllers.length - 1;
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(isFirst ? Icons.my_location : isLast ? Icons.location_on : Icons.circle, 
+                           color: isFirst ? GlassTheme.accentNeonGreen : isLast ? GlassTheme.accentCyan : Colors.white54, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _cityControllers[index],
+                          decoration: InputDecoration(
+                            labelText: isFirst ? "Origin City" : isLast ? "Destination City" : "Waypoint ${index}",
+                            hintText: "City name",
+                          ),
+                        ),
+                      ),
+                      if (!isFirst && !isLast)
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline, color: GlassTheme.danger),
+                          onPressed: () => _removeWaypoint(index),
+                        )
+                    ],
+                  ),
+                  if (!isLast)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                      child: Row(
+                        children: [
+                          Container(width: 2, height: 40, color: Colors.white12, margin: const EdgeInsets.symmetric(horizontal: 10)),
+                          const SizedBox(width: 20),
+                          const Text("Via: ", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12)),
+                          const SizedBox(width: 12),
+                          _modeSelector(index, "road", Icons.local_shipping),
+                          const SizedBox(width: 8),
+                          _modeSelector(index, "air", Icons.flight),
+                          const SizedBox(width: 8),
+                          _modeSelector(index, "ship", Icons.directions_boat),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          
+          const SizedBox(height: 20),
+          Center(
+            child: TextButton.icon(
+              onPressed: _addWaypoint,
+              icon: const Icon(Icons.add, color: GlassTheme.accentCyan),
+              label: const Text("ADD WAYPOINT", style: TextStyle(color: GlassTheme.accentCyan)),
+            ),
+          ),
         ]),
       ),
       const SizedBox(height: 20),
 
-      // Step 2: Cargo type
       GlassContainer(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          _sectionLabel("STEP 2", "What are you shipping?", Icons.inventory_2, GlassTheme.accentCyan),
+          _sectionLabel("CARGO", "What are you shipping?", Icons.inventory_2, GlassTheme.accentCyan),
           const SizedBox(height: 16),
           Wrap(spacing: 8, runSpacing: 8, children: _cargoTypes.map((type) {
             final isSelected = _cargoType == type;
@@ -231,19 +264,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       const SizedBox(height: 24),
 
-      // Find Routes button
       SizedBox(
         height: 56,
         child: ElevatedButton.icon(
-          onPressed: _isLoadingRoute ? null : _findRoutes,
-          icon: _isLoadingRoute
+          onPressed: _isLoadingSim ? null : _simulateManualRoute,
+          icon: _isLoadingSim
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: GlassTheme.backgroundDark))
-              : const Icon(Icons.search, size: 22),
-          label: Text(_isLoadingRoute ? "FINDING ROUTES..." : "FIND ROUTES", style: const TextStyle(fontSize: 16, letterSpacing: 1.0)),
+              : const Icon(Icons.play_arrow, size: 22),
+          label: Text(_isLoadingSim ? "SIMULATING..." : "RUN SIMULATION", style: const TextStyle(fontSize: 16, letterSpacing: 1.0)),
+          style: ElevatedButton.styleFrom(backgroundColor: GlassTheme.accentNeonGreen, foregroundColor: Colors.black),
         ),
       ),
 
-      // Status message
       if (_statusMessage.isNotEmpty) ...[
         const SizedBox(height: 20),
         GlassContainer(
@@ -260,6 +292,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]);
   }
 
+  Widget _modeSelector(int index, String mode, IconData icon) {
+    final isSelected = _modes[index] == mode;
+    return InkWell(
+      onTap: () => setState(() => _modes[index] = mode),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white24 : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.white54 : Colors.white10),
+        ),
+        child: Icon(icon, size: 18, color: isSelected ? Colors.white : Colors.white54),
+      ),
+    );
+  }
+
   Widget _sectionLabel(String step, String title, IconData icon, Color color) {
     return Row(children: [
       Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
@@ -274,19 +323,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildEmptyState() {
     return GlassContainer(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.route, size: 80, color: GlassTheme.accentNeonGreen.withOpacity(0.2)),
+        Icon(Icons.precision_manufacturing, size: 80, color: GlassTheme.accentNeonGreen.withOpacity(0.2)),
         const SizedBox(height: 24),
-        Text("How it works", style: Theme.of(context).textTheme.titleLarge?.copyWith(color: GlassTheme.textSecondary)),
+        Text("Manual Route Simulation", style: Theme.of(context).textTheme.titleLarge?.copyWith(color: GlassTheme.textSecondary)),
         const SizedBox(height: 20),
-        _howItWorksStep("1", "Enter your origin and destination cities", Icons.edit_location_alt),
+        _howItWorksStep("1", "Add all intermediate cities you want to route through", Icons.add_location),
         const SizedBox(height: 12),
-        _howItWorksStep("2", "Pick your cargo type (electronics, food, etc.)", Icons.inventory_2),
+        _howItWorksStep("2", "Select the specific transport mode between each stop", Icons.directions_boat),
         const SizedBox(height: 12),
-        _howItWorksStep("3", "Click 'Find Routes' — we find the best paths", Icons.search),
-        const SizedBox(height: 12),
-        _howItWorksStep("4", "Choose a route and click 'Simulate' to run Monte Carlo analysis", Icons.analytics),
-        const SizedBox(height: 12),
-        _howItWorksStep("5", "Check the History tab for detailed delay & cost forecasts", Icons.history),
+        _howItWorksStep("3", "Click 'Run Simulation' to execute Monte Carlo analysis", Icons.play_arrow),
       ]),
     );
   }
@@ -302,179 +347,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ]);
   }
 
-  Widget _buildRouteResults() {
-    final origin = _routeResult?["origin"] ?? _originController.text;
-    final dest = _routeResult?["destination"] ?? _destinationController.text;
-
-    return SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        const Icon(Icons.alt_route, color: GlassTheme.accentCyan, size: 24),
-        const SizedBox(width: 12),
-        Text("Route Options", style: Theme.of(context).textTheme.titleLarge),
-        const Spacer(),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: GlassTheme.accentCyan.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-          child: Text("$origin → $dest", style: const TextStyle(color: GlassTheme.accentCyan, fontSize: 12, fontWeight: FontWeight.bold))),
-      ]),
-      const SizedBox(height: 8),
-      Text("We found 3 route options. Pick one and click 'Simulate' to run a full disruption analysis.", style: Theme.of(context).textTheme.bodyMedium),
-      const SizedBox(height: 20),
-
-      _routeOptionCard("fastest", "⚡ Fastest Route", "Minimizes travel time", Icons.speed, Colors.orangeAccent),
-      const SizedBox(height: 12),
-      _routeOptionCard("cheapest", "💰 Cheapest Route", "Minimizes shipping cost", Icons.savings, GlassTheme.accentNeonGreen),
-      const SizedBox(height: 12),
-      _routeOptionCard("balanced", "⚖️ Balanced Route", "Best mix of time & cost", Icons.balance, GlassTheme.accentCyan),
-
-      // Simulation results inline
-      if (_simResult != null) ...[
-        const SizedBox(height: 24),
-        _buildSimResultCard(),
-      ],
-    ]));
-  }
-
   Widget _buildSimResultCard() {
-    final result = _simResult!["result"] ?? _simResult!;
-    final simTime = result["mean_total_time_h"] ?? result["total_time_h"];
-    final simCost = result["mean_total_cost"] ?? result["total_cost_usd"];
-    final riskScore = result["risk"]?["combined_risk_score"] ?? result["combined_risk_score"];
-    final riskLevel = result["risk"]?["risk_level"] ?? result["risk_level"] ?? "Unknown";
-    final recommendation = result["risk"]?["recommendation"] ?? result["recommendation"] ?? "";
-
-    // Get route estimate for comparison
-    final routeData = (_selectedRouteKey != null && _routeResult != null) ? _routeResult![_selectedRouteKey!] : null;
-    final routeCost = routeData != null ? routeData["total_cost_usd"] : null;
-    final routeTime = routeData != null ? routeData["total_time_readable"] : null;
+    final result = _simResult!["summary"] ?? _simResult!["result"] ?? _simResult!;
+    final simTime = result["time_mean"] ?? result["mean_total_time_h"] ?? result["total_time_h"] ?? 0.0;
+    final simCost = result["cost_mean"] ?? result["mean_total_cost"] ?? result["total_cost_usd"] ?? 0.0;
+    final riskScore = result["risk_score"] ?? result["risk"]?["combined_risk_score"] ?? 0.0;
+    final riskLevel = result["risk_level"] ?? result["risk"]?["risk_level"] ?? "Unknown";
 
     Color riskColor = GlassTheme.accentNeonGreen;
-    if (riskLevel == "HIGH" || riskLevel == "CRITICAL") riskColor = GlassTheme.danger;
-    else if (riskLevel == "MODERATE") riskColor = Colors.orangeAccent;
+    if (riskLevel == "HIGH" || riskLevel == "CRITICAL" || riskLevel == "High") riskColor = GlassTheme.danger;
+    else if (riskLevel == "MODERATE" || riskLevel == "Medium") riskColor = Colors.orangeAccent;
 
-    return GlassContainer(
-      borderColor: riskColor.withOpacity(0.4),
-      padding: const EdgeInsets.all(24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: riskColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-            child: Icon(Icons.analytics, color: riskColor, size: 24)),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("Simulation Results", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            Text("Monte Carlo disruption forecast", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12)),
-          ])),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: riskColor.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-            child: Text(riskLevel.toString(), style: TextStyle(color: riskColor, fontSize: 12, fontWeight: FontWeight.bold))),
-        ]),
-        const SizedBox(height: 20),
-
-        // Comparison: Route Estimate vs Simulation
-        Row(children: [
-          Expanded(child: _comparisonColumn("📋 Route Estimate", routeTime ?? "—", "\$${routeCost ?? '—'}", GlassTheme.accentCyan)),
-          Container(width: 1, height: 60, color: Colors.white.withOpacity(0.1)),
-          Expanded(child: _comparisonColumn("🎲 Simulation Forecast", simTime != null ? "${(simTime as num).toStringAsFixed(1)} hrs" : "—", simCost != null ? "\$${(simCost as num).toStringAsFixed(2)}" : "—", Colors.orangeAccent)),
-        ]),
-
-        if (riskScore != null) ...[
-          const SizedBox(height: 16),
-          Row(children: [
-            Text("Risk Score: ", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 13)),
-            Text("${((riskScore as num) * 100).toStringAsFixed(1)}%", style: TextStyle(color: riskColor, fontWeight: FontWeight.bold, fontSize: 15)),
-          ]),
-          const SizedBox(height: 6),
-          ClipRRect(borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: (riskScore as num).toDouble(), backgroundColor: Colors.white.withOpacity(0.1), color: riskColor, minHeight: 6)),
-        ],
-
-        if (recommendation.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: riskColor.withOpacity(0.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: riskColor.withOpacity(0.2))),
-            child: Row(children: [
-              Icon(Icons.lightbulb_outline, color: riskColor, size: 16),
-              const SizedBox(width: 8),
-              Expanded(child: Text(recommendation.toString(), style: TextStyle(color: GlassTheme.textPrimary, fontSize: 12))),
-            ])),
-        ],
-      ]),
-    );
-  }
-
-  Widget _comparisonColumn(String label, String time, String cost, Color color) {
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(children: [
-        Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text(time, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: GlassTheme.textPrimary)),
-        Text(cost, style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.bold)),
-      ]));
-  }
-
-  Widget _routeOptionCard(String key, String title, String subtitle, IconData icon, Color color) {
-    final data = _routeResult?[key];
-    final hasRoute = data != null && !data.containsKey("error");
-    final isSelected = _selectedRouteKey == key;
-
-    return InkWell(
-      onTap: hasRoute ? () => setState(() => _selectedRouteKey = key) : null,
-      borderRadius: BorderRadius.circular(16),
+    return SingleChildScrollView(
       child: GlassContainer(
-        borderColor: isSelected ? color.withOpacity(0.6) : hasRoute ? color.withOpacity(0.2) : GlassTheme.danger.withOpacity(0.2),
-        padding: const EdgeInsets.all(20),
+        borderColor: riskColor.withOpacity(0.4),
+        padding: const EdgeInsets.all(24),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 22)),
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: riskColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+              child: Icon(Icons.analytics, color: riskColor, size: 24)),
             const SizedBox(width: 14),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: hasRoute ? GlassTheme.textPrimary : GlassTheme.textSecondary)),
-              Text(subtitle, style: const TextStyle(color: GlassTheme.textSecondary, fontSize: 12)),
+              Text("Simulation Complete", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text("Monte Carlo disruption forecast for custom route", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12)),
             ])),
-            if (isSelected) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-              child: Text("SELECTED", style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold))),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: riskColor.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+              child: Text(riskLevel.toString(), style: TextStyle(color: riskColor, fontSize: 12, fontWeight: FontWeight.bold))),
           ]),
-          if (hasRoute) ...[
-            const SizedBox(height: 16),
+          const SizedBox(height: 32),
+
+          Row(children: [
+            Expanded(child: _comparisonColumn("⏱️ Estimated Time", "${(simTime as num).toStringAsFixed(1)} hrs", Colors.orangeAccent)),
+            Container(width: 1, height: 60, color: Colors.white.withOpacity(0.1)),
+            Expanded(child: _comparisonColumn("💰 Estimated Cost", "\$${(simCost as num).toStringAsFixed(2)}", GlassTheme.accentNeonGreen)),
+          ]),
+
+          if (riskScore != null) ...[
+            const SizedBox(height: 24),
             Row(children: [
-              _metricChip("${data['total_distance_km']} km", Icons.straighten, color),
-              const SizedBox(width: 8),
-              _metricChip("${data['total_time_readable']}", Icons.access_time, color),
-              const SizedBox(width: 8),
-              _metricChip("\$${data['total_cost_usd']}", Icons.attach_money, color),
-              const SizedBox(width: 8),
-              _metricChip("${data['num_hops']} hops", Icons.linear_scale, color),
+              Text("Combined Risk Score: ", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 13)),
+              Text("${((riskScore as num) * 100).toStringAsFixed(1)}%", style: TextStyle(color: riskColor, fontWeight: FontWeight.bold, fontSize: 15)),
             ]),
-            if (data['modes_used'] != null) ...[
-              const SizedBox(height: 10),
-              Wrap(spacing: 6, children: (data['modes_used'] as List).map<Widget>((mode) {
-                final modeIcons = {"HIGHWAY": "🚛", "SEA": "🚢", "AIR": "✈️"};
-                return Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(6)),
-                  child: Text("${modeIcons[mode] ?? '📦'} $mode", style: const TextStyle(fontSize: 11, color: GlassTheme.textSecondary)));
-              }).toList()),
-            ],
-            if (isSelected) ...[
-              const SizedBox(height: 16),
-              SizedBox(height: 44, child: ElevatedButton.icon(
-                onPressed: _isLoadingSim ? null : () => _simulatePath(key),
-                icon: _isLoadingSim ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: GlassTheme.backgroundDark)) : const Icon(Icons.analytics, size: 18),
-                label: Text(_isLoadingSim ? "SIMULATING..." : "SIMULATE THIS ROUTE", style: const TextStyle(fontSize: 13, letterSpacing: 0.5)),
-                style: ElevatedButton.styleFrom(backgroundColor: color),
-              )),
-            ],
-          ] else
-            Padding(padding: const EdgeInsets.only(top: 12), child: Text(data?["error"] ?? "No route found", style: const TextStyle(color: GlassTheme.danger, fontSize: 13))),
+            const SizedBox(height: 8),
+            ClipRRect(borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(value: (riskScore as num).toDouble(), backgroundColor: Colors.white.withOpacity(0.1), color: riskColor, minHeight: 6)),
+          ],
+          
+          const SizedBox(height: 32),
+          const Text("Note: This route was saved to your History tab. You can view the full interactive map and detailed breakdown there.", 
+            style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12, fontStyle: FontStyle.italic)),
         ]),
       ),
     );
   }
 
-  Widget _metricChip(String value, IconData icon, Color color) {
-    return Expanded(child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
+  Widget _comparisonColumn(String label, String value, Color color) {
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(children: [
-        Icon(icon, size: 14, color: color.withOpacity(0.7)),
-        const SizedBox(height: 4),
-        Text(value, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: GlassTheme.textPrimary)),
-      ]),
-    ));
+        Text(label, style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: color)),
+      ]));
   }
 }
 

@@ -102,6 +102,8 @@ def monte_carlo_des(locations, modes, n_iterations=100, seed=42,
                 )
 
         shipment = Shipment(env, f"MC-{i+1:03d}")
+        shipment.quantity = Q if Q is not None else 1.0
+        shipment.product_type = pt if pt is not None else "general"
 
         def _run(sh=shipment, rt=planner.route):
             for el in rt:

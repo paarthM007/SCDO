@@ -136,6 +136,7 @@ def api_simulate():
             "user_id": uid,
             "cities": cities,
             "modes": modes,
+            "path_edges": data.get("path_edges", []),
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
             # v3.0 CTR parameters
@@ -143,7 +144,7 @@ def api_simulate():
             "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
-            "source": "api_simulate"
+            "source": data.get("source", "api_simulate")
         })
         return jsonify({
             "status": "ok", 
@@ -206,79 +207,6 @@ def api_alternate_route():
         omega=omega,
     )
     return jsonify({"status": "ok", "result": result})
-
-@app.route("/api/simulate-path", methods=["POST"])
-def api_simulate_path():
-    """
-    Simulate a single chosen path (fastest / cheapest / balanced).
-    v3.0: Passes CTR parameters to simulation engine.
-    """
-    uid = _get_user()
-    if not uid: return _err("Unauthorized", 401)
-    if not _check_rate_limit(uid): return _err("Rate limit exceeded. Please wait a minute.", 429)
-
-    data = request.json or {}
-    route_key = data.get("route_key")          # "fastest" | "cheapest" | "balanced"
-    if route_key not in ("fastest", "cheapest", "balanced"):
-        return _err("route_key must be one of: fastest, cheapest, balanced")
-
-    # Parse v3.0 CTR parameters
-    quantity = data.get("quantity")
-    if quantity is not None:
-        try:
-            quantity = float(quantity)
-        except (ValueError, TypeError):
-            quantity = None
-
-    # Re-compute the specific route so we have path_edges
-    result = find_alternate_route(
-        origin=data.get("start"),
-        destination=data.get("end"),
-        blocked_nodes=data.get("blocked", []),
-        cargo_type=data.get("cargo_type", "general"),
-        quantity=quantity,
-        product_type=data.get("product_type"),
-        budget=data.get("budget"),
-        deadline_h=data.get("deadline_h"),
-        omega=data.get("omega"),
-    )
-    path_data = result.get(route_key)
-    if not path_data or "error" in path_data:
-        return _err(f"No valid '{route_key}' route found")
-
-    cities, modes, edges = extract_simulation_params(path_data)
-    if not cities or not modes:
-        return _err("Could not extract simulation params from route")
-
-    n_iter = data.get("n_iterations", DEFAULT_MC_ITERATIONS)
-
-    try:
-        db = get_db()
-        job_ref = db.collection(FIRESTORE_COLLECTION).add({
-            "user_id": uid,
-            "cities": cities,
-            "modes": modes,
-            "path_edges": edges,
-            "cargo_type": data.get("cargo_type", "general"),
-            "n_iterations": n_iter,
-            # v3.0 CTR parameters
-            "quantity": quantity,
-            "product_type": data.get("product_type"),
-            "status": "pending",
-            "created_at": datetime.now(timezone.utc),
-            "source": f"alternate_route_{route_key}"
-        })
-        return jsonify({
-            "status": "ok",
-            "message": f"Simulation enqueued for '{route_key}' path",
-            "job_id": job_ref[1].id,
-            "route_key": route_key,
-            "cities": cities,
-            "modes": modes
-        })
-    except Exception as e:
-        logger.error(f"Failed to enqueue simulation: {e}")
-        return _err(str(e), 500)
 
 @app.route("/api/history", methods=["GET"])
 def api_history():
