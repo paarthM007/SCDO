@@ -19,6 +19,14 @@ from scdo.simulation.monte_carlo import run_simulation_with_risk, monte_carlo_de
 from scdo.analytics import get_job_history, compute_analytics
 from scdo.reports import generate_report_pdf
 
+# --- Live Orchestrator Imports ---
+import uuid
+from scdo.simulation.crisis_manager import CrisisManager
+from scdo.simulation.telemetry_monitor import TelemetryMonitor
+from scdo.simulation.shipment_tracker import ShipmentOrchestrator, ActiveShipment, parse_route_to_plan, NodeStep, LinkStep
+from scdo.routing.cities_data import get_all_nodes
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("gateway")
 
@@ -28,6 +36,16 @@ RATE_LIMIT_MAX = 5 # requests per window
 
 app = Flask(__name__)
 CORS(app)
+
+# --- Global State Setup for Live Orchestrator ---
+crisis_manager = CrisisManager()
+telemetry_monitor = TelemetryMonitor(crisis_manager)
+orchestrator = ShipmentOrchestrator(telemetry_monitor)
+
+# Pre-warm telemetry with mocked baselines
+all_nodes = get_all_nodes()
+mocked_baselines = {n["name"]: {"mean": 2.0, "std_dev": 0.5} for n in all_nodes}
+telemetry_monitor.pre_warm_baselines(mocked_baselines)
 
 def _start_worker_thread():
     try:
@@ -556,6 +574,108 @@ def api_multi_supplier_routes():
 def api_cities():
     q = request.args.get("q", "")
     return jsonify({"cities": list_cities(q)})
+
+@app.route("/api/dispatch", methods=["POST"])
+def api_dispatch():
+    data = request.json or {}
+    cargo_type = data.get("cargo_type", "PERISHABLE")
+    origin = data.get("origin")
+    destination = data.get("destination")
+    
+    if not origin or not destination:
+        return _err("Missing origin or destination")
+        
+    crisis_manager.reset_crises()
+    orchestrator.active_shipments.clear()
+    
+    route_resp = find_route(
+        origin=origin,
+        destination=destination,
+        cargo_type=cargo_type,
+        quantity=100
+    )
+    if "error" in route_resp:
+        return _err(route_resp["error"])
+        
+    path_edges = route_resp.get("path_edges", [])
+    if not path_edges:
+        return _err("No path edges returned")
+        
+    route_plan = parse_route_to_plan(path_edges)
+    shipment_id = str(uuid.uuid4())
+    shipment = ActiveShipment(shipment_id=shipment_id, cargo_type=cargo_type, route_plan=route_plan)
+    orchestrator.add_shipment(shipment)
+    
+    route_names = [step.name for step in route_plan if isinstance(step, NodeStep)]
+    
+    return jsonify({
+        "shipment_id": shipment_id,
+        "route_plan": route_names,
+        "status": "DISPATCHED"
+    })
+
+@app.route("/api/tick", methods=["POST"])
+def api_tick():
+    data = request.json or {}
+    hours_to_advance = float(data.get("hours_to_advance", 1.0))
+    
+    crises_before = set(crisis_manager.banned_nodes).union(set(crisis_manager.active_risk_multipliers.keys()))
+    
+    orchestrator.tick(hours_to_advance)
+    
+    crises_after = set(crisis_manager.banned_nodes).union(set(crisis_manager.active_risk_multipliers.keys()))
+    new_crises = crises_after - crises_before
+    
+    for crisis_node in new_crises:
+        orchestrator.evaluate_active_routes(crisis_node)
+
+    shipments_data = []
+    for s_id, shipment in orchestrator.active_shipments.items():
+        current_step = shipment.route_plan[shipment.current_step_index]
+        
+        if isinstance(current_step, NodeStep):
+            curr_name = current_step.name
+            next_name = shipment.route_plan[shipment.current_step_index + 1].name if (shipment.current_step_index + 1) < len(shipment.route_plan) else "Final Destination"
+        else:
+            curr_name = f"Transit to {current_step.to_node}"
+            next_name = current_step.to_node
+
+        progress_pct = shipment.progress_on_step / max(0.001, current_step.time_h) if current_step.time_h > 0 else 1.0
+        
+        route_names = [step.name for step in shipment.route_plan if isinstance(step, NodeStep)]
+                
+        fresh_logs = list(shipment.decision_logs)
+        shipment.decision_logs.clear()
+
+        shipments_data.append({
+            "shipment_id": shipment.shipment_id,
+            "status": shipment.status,
+            "current_step_name": curr_name,
+            "next_step_name": next_name,
+            "progress_percentage": round(progress_pct, 2),
+            "route_plan": route_names,
+            "fresh_logs": fresh_logs
+        })
+
+    active_crises = list(crises_after)
+    
+    telemetry_charts = {}
+    for node in active_crises:
+        if node in telemetry_monitor.baselines and node in telemetry_monitor.live_windows:
+            windows = telemetry_monitor.live_windows[node]
+            telemetry_charts[node] = {
+                "rolling_mean": sum(windows) / len(windows) if len(windows) > 0 else 0,
+                "threshold": telemetry_monitor.baselines[node]["mean"] + (3 * telemetry_monitor.baselines[node]["std_dev"]),
+                "history": list(windows)
+            }
+
+    return jsonify({
+        "active_shipments": shipments_data,
+        "global_state": {
+            "active_crises": active_crises,
+            "telemetry_charts": telemetry_charts
+        }
+    })
 
 if __name__ == "__main__":
     get_graph()
