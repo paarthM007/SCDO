@@ -23,6 +23,8 @@ class _SupplyRoutesScreenState extends State<SupplyRoutesScreen>
     TextEditingController(text: "Mumbai"),
     TextEditingController(text: "Shanghai"),
   ];
+  final TextEditingController _blockedController =
+      TextEditingController(text: "Dubai, Istanbul");
 
   // Smart disruption controls
   bool _avoidDisruptions = true;
@@ -103,6 +105,11 @@ class _SupplyRoutesScreenState extends State<SupplyRoutesScreen>
           "cargo_type": _cargoType,
           "risk_threshold": _riskThreshold,
           "avoid_disruptions": _avoidDisruptions,
+          "blocked": _blockedController.text
+              .split(',')
+              .map((e) => e.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
         }),
       );
 
@@ -170,6 +177,15 @@ class _SupplyRoutesScreenState extends State<SupplyRoutesScreen>
             ]),
             const SizedBox(height: 16),
             TextField(controller: _buyerController, decoration: const InputDecoration(labelText: "Buyer City", prefixIcon: Icon(Icons.location_city, color: GlassTheme.accentNeonGreen), hintText: "e.g. London, New York, Tokyo")),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _blockedController,
+              decoration: const InputDecoration(
+                labelText: "Manual Blocked Nodes",
+                prefixIcon: Icon(Icons.block, color: GlassTheme.danger),
+                hintText: "e.g. Dubai, Istanbul",
+              ),
+            ),
           ]),
         ),
         const SizedBox(height: 20),

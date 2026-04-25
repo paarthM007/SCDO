@@ -85,11 +85,14 @@ CARGO_PROFILES = {
     'STANDARD':   {'time': 0.33, 'cost': 0.33, 'risk': 0.34},
 }
 
-def _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type='STANDARD'):
+def _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type='STANDARD', omega=None):
     """
     Min-Max / Baseline normalization for Multi-Objective Cost Function.
     Ensures that Time, Cost, and Risk fall roughly between 0.0 and 1.0
     so weights can be applied meaningfully without one metric dominating.
+
+    v3.0 Logic: If user provides omega (Time-Cost preference), it overrides 
+    the base profile's time/cost weights while preserving risk sensitivity.
     """
     MAX_EXPECTED_TIME = 200.0  # hours (e.g. 8 days by sea)
     MAX_EXPECTED_COST = 5000.0 # dollars
@@ -99,11 +102,24 @@ def _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type='STANDARD'
     norm_cost = edge_cost / MAX_EXPECTED_COST
     norm_risk = edge_risk / MAX_EXPECTED_RISK
 
-    weights = CARGO_PROFILES.get(cargo_type.upper(), CARGO_PROFILES['STANDARD'])
+    profile = CARGO_PROFILES.get(cargo_type.upper(), CARGO_PROFILES['STANDARD'])
+    
+    if omega is not None:
+        # Use user's omega to balance Time vs Cost, 
+        # but keep the profile's risk weight and scale others to fit.
+        risk_w = profile['risk']
+        remaining_w = 1.0 - risk_w
+        w_time = (1.0 - omega) * remaining_w
+        w_cost = omega * remaining_w
+        w_risk = risk_w
+    else:
+        w_time = profile['time']
+        w_cost = profile['cost']
+        w_risk = profile['risk']
 
-    score = (norm_time * weights['time']) + \
-            (norm_cost * weights['cost']) + \
-            (norm_risk * weights['risk'])
+    score = (norm_time * w_time) + \
+            (norm_cost * w_cost) + \
+            (norm_risk * w_risk)
 
     return score
 
@@ -299,7 +315,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
              objective="FASTEST", blocked_nodes=None,
              # ── v3.0 CTR shipment parameters ──
              quantity=None, product_type=None, risk_score=0.0,
-             omega=None, max_budget=None, cargo_type="STANDARD"):
+             omega=None, max_budget=None, deadline_h=None, cargo_type="STANDARD"):
     """
     Cargo-aware Dijkstra with CTR Tensor edge weighting.
     
@@ -308,10 +324,10 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     Otherwise, falls back to legacy static weights for backward compatibility.
     
     Implements:
-    - Dynamic W(e) = ω·Ĉ(e) + (1-ω)·T̂(e) weighting (Legacy)
-    - Phase 2 Dynamic Cargo Weighting: _calculate_edge_score
+    - Dynamic W(e) weighting using _calculate_edge_score
+    - User preference (omega) integration (§3.I)
     - Cargo-mode incompatibility pruning
-    - Budget constraint pruning (early exit)
+    - Budget & Deadline constraint pruning (early exit)
     """
     blocked = set(blocked_nodes or [])
 
@@ -328,7 +344,8 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     budget_limit = max_budget if max_budget is not None else DEFAULT_MAX_BUDGET
 
     dist = {nid: float("inf") for nid in graph.nodes}
-    cost_so_far = {nid: 0.0 for nid in graph.nodes}  # track accumulated cost for budget pruning
+    cost_so_far = {nid: 0.0 for nid in graph.nodes}
+    time_so_far = {nid: 0.0 for nid in graph.nodes}
     prev = {}
     dist[src_id] = 0.0
     heap = [(0.0, src_id)]
@@ -371,12 +388,16 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
 
                 # ── Phase 2: Dynamic Cargo Weighting ──
                 # Replaces previous omega calculation with cargo profile scoring
-                edge_score = _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type)
+                edge_score = _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type, omega=omega)
                 new_w = cur_w + edge_score
 
-                # ── Budget constraint early exit ──
+                # ── Constraint early exit (Budget & Deadline) ──
                 new_accumulated_cost = cost_so_far[cur] + edge_cost
+                new_accumulated_time = time_so_far[cur] + edge_time
+                
                 if new_accumulated_cost > budget_limit:
+                    continue
+                if deadline_h is not None and new_accumulated_time > deadline_h:
                     continue
             else:
                 # ── Legacy mode ──
@@ -388,6 +409,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
             if new_w < dist[nb]:
                 dist[nb] = new_w
                 cost_so_far[nb] = new_accumulated_cost
+                time_so_far[nb] = new_accumulated_time
                 prev[nb] = (cur, edge, edge_cost, edge_time)
                 heapq.heappush(heap, (new_w, nb))
 

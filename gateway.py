@@ -414,6 +414,7 @@ def api_multi_supplier_routes():
     cargo_type = data.get("cargo_type", "general")
     risk_threshold = float(data.get("risk_threshold", 0.65))
     avoid_disruptions = data.get("avoid_disruptions", True)
+    manual_blocked = data.get("blocked", [])
 
     if not buyer: return _err("Provide 'buyer' city name")
     if not suppliers or not isinstance(suppliers, list):
@@ -440,7 +441,7 @@ def api_multi_supplier_routes():
         initial_result = find_alternate_route(
             origin=supplier,
             destination=buyer,
-            blocked_nodes=[],
+            blocked_nodes=manual_blocked,
             cargo_type=cargo_type,
         )
 
@@ -520,7 +521,7 @@ def api_multi_supplier_routes():
             route_result = find_alternate_route(
                 origin=supplier,
                 destination=buyer,
-                blocked_nodes=auto_blocked,
+                blocked_nodes=list(set(auto_blocked + manual_blocked)),
                 cargo_type=cargo_type,
             )
         else:

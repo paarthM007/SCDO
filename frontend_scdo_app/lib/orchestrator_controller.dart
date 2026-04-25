@@ -41,8 +41,8 @@ class OrchestratorController extends ChangeNotifier {
       isRunning = true;
       notifyListeners();
 
-      // 3. Start heartbeat — 1 real second = 1 simulated hour
-      _ticker = Timer.periodic(const Duration(milliseconds: 1000), _onTick);
+      // 3. Start heartbeat — 30 real seconds = 1 simulated hour
+      _ticker = Timer.periodic(const Duration(milliseconds: 30000), _onTick);
     } catch (e) {
       auditLogs.insert(0, '[ERROR] Dispatch failed: $e');
       notifyListeners();
