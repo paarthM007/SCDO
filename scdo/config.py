@@ -68,10 +68,10 @@ FIXED_OVERHEAD = {
 
 # ── Variable Rate V(mode) — cost per unit·km ──────────────────
 VARIABLE_RATE = {
-    "HIGHWAY": 0.00025,  # $/unit-km  (trucks, moderate)
-    "SEA":     0.00004,  # $/unit-km  (ships, cheapest per unit)
-    "AIR":     0.0015,   # $/unit-km  (planes, most expensive)
-    "RAIL":    0.0001,   # $/unit-km  (trains, efficient)
+    "HIGHWAY": 0.00025,  # $/km (trucks, moderate)
+    "SEA":     0.00004,  # $/km (ships, cheapest)
+    "AIR":     0.0015,   # $/km (planes, most expensive)
+    "RAIL":    0.0001,   # $/km (trains, efficient)
 }
 
 # ── Speed Constants s(mode) — km/h ────────────────────────────

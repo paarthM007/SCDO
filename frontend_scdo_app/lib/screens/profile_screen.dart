@@ -176,7 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: "Minimum Order Quantity",
-                        prefixIcon: Icon(Icons.production_quantity_limits),
+                        prefixIcon: Icon(Icons.inventory_2),
                       ),
                     ),
                     const SizedBox(height: 16),
