@@ -350,6 +350,21 @@ class _AltRouteScreenState extends State<AltRouteScreen>
             ),
           ]),
           const SizedBox(height: 12),
+          // ── v3.0: Display Path Waypoints ──
+          if (pathData["waypoints"] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                (pathData["waypoints"] as List)
+                    .map((w) => w["name"])
+                    .join(" → "),
+                style: GoogleFonts.firaCode(
+                  fontSize: 11,
+                  color: accentColor.withOpacity(0.9),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           Row(
             children: [
               _statChip(Icons.straighten, "$dist km", Colors.white70),
