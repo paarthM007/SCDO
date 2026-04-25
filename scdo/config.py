@@ -117,3 +117,13 @@ DEFAULT_PRODUCT_TYPE = "general"
 DEFAULT_OMEGA = 0.5            # balanced cost-time preference
 DEFAULT_MAX_BUDGET = float("inf")
 DEFAULT_DEADLINE_H = float("inf")
+
+# ── Cargo Specialty Requirements ──────────────────────────────
+# Map cargo types to the specific node capabilities required.
+CARGO_REQUIREMENTS = {
+    'PERISHABLE': 'COLD_CHAIN',
+    'HAZMAT':     'HAZMAT_CERT',
+    'HIGH_VALUE': 'SECURE_STORAGE',
+    'BULK':       'HEAVY_LIFT',
+    'STANDARD':   None
+}

@@ -7,9 +7,10 @@ from typing import Optional
 from scdo.simulation.entities import get_lognormal_params
 
 class Node:
-    def __init__(self, env, name):
+    def __init__(self, env, name, capabilities=None):
         self.env = env
         self.name = name
+        self.capabilities = capabilities or ["GENERAL"]
         
         # Consult CrisisManager for active risk multipliers
         from scdo.simulation.crisis_manager import CrisisManager

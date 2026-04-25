@@ -7,6 +7,7 @@ import 'package:scdo_app/screens/route_comparison_screen.dart';
 import 'package:scdo_app/screens/history_screen.dart';
 import 'package:scdo_app/screens/profile_screen.dart';
 import 'package:scdo_app/screens/search_profiles_screen.dart';
+import 'package:scdo_app/orchestrator_page.dart';
 
 class AppScaffold extends StatefulWidget {
   const AppScaffold({super.key});
@@ -27,6 +28,7 @@ class _AppScaffoldState extends State<AppScaffold> {
     'Simulation History',
     'Community',
     'My Profile',
+    'Live Orchestrator',
   ];
 
   List<Widget> get _screens => [
@@ -44,6 +46,7 @@ class _AppScaffoldState extends State<AppScaffold> {
     const HistoryScreen(),
     const SearchProfilesScreen(),
     const ProfileScreen(),
+    const OrchestratorPage(),
   ];
 
   @override
@@ -111,6 +114,8 @@ class _AppScaffoldState extends State<AppScaffold> {
       _navItem(Icons.history, 'History', 3, "Past simulation results"),
       _navItem(Icons.people, 'Community', 4, "User profiles & ratings"),
       _navItem(Icons.person, 'My Profile', 5, "Your account"),
+      _navDivider("LIVE"),
+      _navItem(Icons.radar, 'Live Orchestrator', 6, "Real-time shipment control"),
     ]));
   }
 

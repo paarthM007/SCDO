@@ -62,6 +62,7 @@ class ActiveShipment:
         self.current_step_index = 0
         self.progress_on_step = 0.0
         self.status = 'IN_TRANSIT'
+        self.decision_logs = []
 
     def get_divert_node(self) -> NodeStep:
         """
@@ -106,7 +107,7 @@ class ShipmentOrchestrator:
                 # Trigger anomaly detection right when a shipment finishes a Node
                 if isinstance(current_step, NodeStep) and self.telemetry_monitor:
                     actual_hours_spent = step_duration  # In a full simulation, this includes stochastic noise
-                    self.telemetry_monitor.record_dwell_time(current_step.name, actual_hours_spent)
+                    self.telemetry_monitor.record_dwell_time(current_step.name, actual_hours_spent, shipment=shipment)
                 # ----------------------------------
 
                 shipment.progress_on_step -= step_duration
@@ -138,6 +139,7 @@ class ShipmentOrchestrator:
                     
             if is_affected:
                 logger.info(f"Shipment {shipment.shipment_id} is affected by crisis at {crisis_node}. Rerouting...")
+                shipment.decision_logs.append(f"CRISIS AVOIDANCE: Shipment affected by crisis at {crisis_node}. Calculating new route...")
                 shipment.status = 'REROUTING'
                 divert_node = shipment.get_divert_node()
                 
@@ -156,6 +158,7 @@ class ShipmentOrchestrator:
                 
                 if "error" in new_route_response:
                     logger.warning(f"Could not reroute shipment {shipment.shipment_id}: {new_route_response['error']}")
+                    shipment.decision_logs.append(f"REROUTE FAILED: {new_route_response['error']}")
                     continue
                     
                 new_path_edges = new_route_response.get("path_edges", [])
@@ -181,5 +184,6 @@ class ShipmentOrchestrator:
                         # Thus, current_plan[:divert_index] does not include the old divert node,
                         # and the array remains perfectly alternating.
                         shipment.route_plan = shipment.route_plan[:divert_index] + new_route_plan
+                        shipment.decision_logs.append(f"REROUTE SUCCESS: Splicing new route from {divert_node.name}.")
                         
                 shipment.status = 'IN_TRANSIT'

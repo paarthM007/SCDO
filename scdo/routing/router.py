@@ -20,12 +20,15 @@ from scdo.routing.graph import (
 )
 from scdo.config import (
     DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
-    DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H,
+    DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H, CARGO_REQUIREMENTS,
 )
 
 logger = logging.getLogger(__name__)
 
 _GRAPH: Optional[GlobalRoutingGraph] = None
+
+# CARGO_REQUIREMENTS now imported from config.py
+
 
 def get_graph() -> GlobalRoutingGraph:
     global _GRAPH

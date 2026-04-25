@@ -26,7 +26,7 @@ class TelemetryMonitor:
         for node in self.baselines.keys():
             self.live_windows[node] = deque(maxlen=5)
 
-    def record_dwell_time(self, node_name: str, actual_hours: float):
+    def record_dwell_time(self, node_name: str, actual_hours: float, shipment=None):
         """
         Records the actual processing hours and performs advanced anomaly detection.
         """
@@ -44,6 +44,8 @@ class TelemetryMonitor:
         if anomaly_type:
             print(f"[TELEMETRY] {anomaly_type} Detected at {node_name}! Auto-triggering Crisis Manager.")
             logger.warning(f"{anomaly_type} at {node_name}. Latest Value: {actual_hours:.2f}h")
+            if shipment is not None:
+                shipment.decision_logs.append(f"TELEMETRY ALERT: {anomaly_type} at {node_name}. Auto-triggering Crisis Manager.")
             
             # Inject crisis with a massive 5.0x penalty multiplier to simulate severe gridlock
             self.crisis_manager_ref.inject_news_crisis(node_name, severity_multiplier=5.0)

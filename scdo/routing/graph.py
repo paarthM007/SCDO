@@ -14,6 +14,7 @@ from scdo.config import (
     ALPHA_COST_PENALTY, BETA_DELAY_COEFF, CARGO_MODE_BLACKLIST,
     MODE_MIN_QUANTITY, DEFAULT_QUANTITY, DEFAULT_PRODUCT_TYPE,
     DEFAULT_OMEGA, DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H,
+    CARGO_REQUIREMENTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -340,6 +341,14 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
             nb = edge["to"]
             if nb in blocked: continue
             if allowed_modes and edge["mode"] not in allowed_modes: continue
+            
+            # ── v3.0 Node Capability Pruning ──
+            # HARD CONSTRAINT CHECK:
+            # If the cargo requires a specialty the node doesn't have, skip it.
+            target_node = graph.nodes[nb]
+            required_cap = CARGO_REQUIREMENTS.get(cargo_type.upper())
+            if required_cap and required_cap not in target_node.get("capabilities", ["GENERAL"]):
+                continue  # The router ignores this path entirely
 
             mode = edge["mode"]
             d_km = edge["dist_km"]
