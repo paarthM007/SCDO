@@ -654,7 +654,11 @@ def api_tick():
         
         if isinstance(current_step, NodeStep):
             curr_name = current_step.name
-            next_name = shipment.route_plan[shipment.current_step_index + 1].name if (shipment.current_step_index + 1) < len(shipment.route_plan) else "Final Destination"
+            if (shipment.current_step_index + 1) < len(shipment.route_plan):
+                ns = shipment.route_plan[shipment.current_step_index + 1]
+                next_name = f"Transit to {ns.to_node}" if hasattr(ns, 'to_node') else getattr(ns, 'name', 'Unknown')
+            else:
+                next_name = "Final Destination"
         else:
             curr_name = f"Transit to {current_step.to_node}"
             next_name = current_step.to_node
