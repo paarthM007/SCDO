@@ -110,7 +110,9 @@ class ShipmentOrchestrator:
                 current_step = shipment.route_plan[shipment.current_step_index]
                 
                 # SAFETY NET: Prevent infinite loops if a step has 0 duration
-                step_duration = max(0.001, current_step.time_h)
+                step_duration = 10
+
+                #step_duration = max(0.001, current_step.time_h)
             
                 if shipment.progress_on_step >= step_duration:
                     

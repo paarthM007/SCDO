@@ -595,6 +595,7 @@ def api_dispatch():
         cargo_type=cargo_type,
         quantity=100
     )
+    
     if "error" in route_resp:
         return _err(route_resp["error"])
         
@@ -603,6 +604,10 @@ def api_dispatch():
         return _err("No path edges returned")
         
     route_plan = parse_route_to_plan(path_edges)
+
+    for step in route_plan:
+        print(f"Step: {step.name if hasattr(step, 'name') else 'Link'}, Duration: {step.time_h} hours")
+
     shipment_id = str(uuid.uuid4())
     shipment = ActiveShipment(shipment_id=shipment_id, cargo_type=cargo_type, route_plan=route_plan)
     orchestrator.add_shipment(shipment)
