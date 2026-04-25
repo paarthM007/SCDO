@@ -70,16 +70,11 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
                 seg_edges.append(e)
             else:
                 segments.append(_make_seg(cur_mode, seg_start, seg_edges))
-    for pe in path_edges:
-        segments.append({
-            "mode": pe["mode"],
-            "from": pe["from"],
-            "to": pe["to"],
-            "dist_km": pe["dist_km"],
-            "time_h": pe["time_h"],
-            "cost_usd": pe["cost_usd"],
-            "icon": MODE_ICONS.get(pe["mode"], "📦")
-        })
+                cur_mode = e["mode"]
+                seg_start = e["from"]
+                seg_edges = [e]
+        if seg_edges:
+            segments.append(_make_seg(cur_mode, seg_start, seg_edges))
 
     src_node = graph.nodes[src_id]
     dst_node = graph.nodes[dst_id]
@@ -118,8 +113,12 @@ def _build_result(graph, src_id, dst_id, path_edges, mode_pref, objective,
                         for pe in path_edges
                     )
                     if not is_path_edge:
+                        n_to = graph.nodes[edge["to"]]
+                        n_from = graph.nodes[nid]
                         bg_edges.append({
                             "from_id": nid, "to_id": edge["to"],
+                            "from_lat": n_from["lat"], "from_lon": n_from["lon"],
+                            "to_lat": n_to["lat"], "to_lon": n_to["lon"],
                             "mode": edge["mode"]
                         })
     result["background_edges"] = bg_edges
@@ -168,13 +167,15 @@ def find_route(origin, destination, mode_pref="BEST",
                objective="FASTEST", blocked_nodes=None,
                # ── v3.0 CTR shipment parameters ──
                quantity=None, product_type=None, risk_score=0.0,
-               omega=None, max_budget=None, deadline_h=None):
+               omega=None, max_budget=None, deadline_h=None,
+               cargo_type="STANDARD"):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.
     
     v3.0: When quantity/product_type are provided, uses CTR Tensor
     dynamic edge weighting with cargo-aware constraint pruning.
+    Phase 2: Uses cargo_type for Dynamic Cargo Weighting (Multi-Objective).
     """
     graph = get_graph()
     src_id = find_node_id(graph, origin)
@@ -185,20 +186,26 @@ def find_route(origin, destination, mode_pref="BEST",
     allowed = MODE_SETS.get(mode_pref.upper(), {"HIGHWAY", "SEA", "AIR"})
 
     # Resolve blocked node names to IDs
+    from scdo.simulation.crisis_manager import CrisisManager
+    cm = CrisisManager()
+    
+    all_blocked_names = set(blocked_nodes or [])
+    all_blocked_names.update(cm.banned_nodes)
+
     blocked_ids = set()
-    if blocked_nodes:
-        for bn in blocked_nodes:
-            bid = find_node_id(graph, bn)
-            if bid:
-                blocked_ids.add(bid)
-            else:
-                logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
+    for bn in all_blocked_names:
+        bid = find_node_id(graph, bn)
+        if bid:
+            blocked_ids.add(bid)
+        else:
+            logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
 
     try:
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
             quantity=quantity, product_type=product_type,
             risk_score=risk_score, omega=omega, max_budget=max_budget,
+            cargo_type=cargo_type
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -241,18 +248,81 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "pharmaceuticals": "AIR", "bulk_commodity": "SEA", "hazmat": "LAND_SEA",
         "vehicles": "SEA", "general": "BEST", "electronics": "BEST",
     }
+    
+    PHASE2_MAP = {
+        "frozen_food": "PERISHABLE", "perishable": "PERISHABLE", "live_animals": "PERISHABLE",
+        "pharmaceuticals": "PERISHABLE", "bulk_commodity": "BULK", "hazmat": "STANDARD",
+        "vehicles": "STANDARD", "general": "STANDARD", "electronics": "HIGH_VALUE",
+    }
+    
     effective_mode = mode_pref or CARGO_MODE_MAP.get(cargo_type, "BEST")
     effective_product = product_type or cargo_type
+    phase_2_cargo = PHASE2_MAP.get(cargo_type, "STANDARD")
 
     results = {}
-    for obj in ("FASTEST", "CHEAPEST", "BALANCED"):
-        r = find_route(
-            origin, destination, effective_mode, obj, blocked_nodes,
-            quantity=quantity, product_type=effective_product,
-            risk_score=0.0, omega=omega, max_budget=budget,
-            deadline_h=deadline_h,
-        )
-        results[obj.lower()] = r
+    
+    def _is_duplicate(r1, r2):
+        if not r1 or not r2 or "error" in r1 or "error" in r2: return False
+        return [e["to_id"] for e in r1.get("path_edges", [])] == [e["to_id"] for e in r2.get("path_edges", [])]
+
+    # 1. Fastest
+    r_fast = find_route(
+        origin, destination, effective_mode, "FASTEST", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
+    )
+    results["fastest"] = r_fast
+
+    # 2. Cheapest
+    r_cheap = find_route(
+        origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
+    )
+    
+    # Diversify Cheapest if duplicate
+    if _is_duplicate(r_fast, r_cheap):
+        edges = r_fast.get("path_edges", [])
+        if len(edges) > 1:
+            # Block the middle intermediate node
+            mid_node_name = edges[len(edges) // 2 - 1]["to"]
+            temp_blocked = list(blocked_nodes or []) + [mid_node_name]
+            alt_cheap = find_route(
+                origin, destination, effective_mode, "CHEAPEST", temp_blocked,
+                quantity=quantity, product_type=effective_product,
+                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+                cargo_type=phase_2_cargo
+            )
+            if "error" not in alt_cheap:
+                r_cheap = alt_cheap
+    results["cheapest"] = r_cheap
+
+    # 3. Balanced
+    r_bal = find_route(
+        origin, destination, effective_mode, "BALANCED", blocked_nodes,
+        quantity=quantity, product_type=effective_product,
+        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        cargo_type=phase_2_cargo
+    )
+    
+    # Diversify Balanced if duplicate
+    if _is_duplicate(r_bal, r_fast) or _is_duplicate(r_bal, r_cheap):
+        edges = r_fast.get("path_edges", [])
+        if len(edges) > 1:
+            # Block the first intermediate node
+            first_int_name = edges[0]["to"]
+            temp_blocked = list(blocked_nodes or []) + [first_int_name]
+            alt_bal = find_route(
+                origin, destination, effective_mode, "BALANCED", temp_blocked,
+                quantity=quantity, product_type=effective_product,
+                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+                cargo_type=phase_2_cargo
+            )
+            if "error" not in alt_bal and not _is_duplicate(alt_bal, r_cheap):
+                r_bal = alt_bal
+    results["balanced"] = r_bal
 
     graph = get_graph()
     src_id = find_node_id(graph, origin)
@@ -276,6 +346,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "cheapest": results.get("cheapest"),
         "balanced": results.get("balanced"),
     }
+
 
 
 def extract_simulation_params(route_result):

@@ -73,6 +73,40 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
     a = math.sin(dp/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+# ══════════════════════════════════════════════════════════════
+# Phase 2: Dynamic Cargo Weighting
+# ══════════════════════════════════════════════════════════════
+
+CARGO_PROFILES = {
+    'PERISHABLE': {'time': 0.80, 'cost': 0.05, 'risk': 0.15},
+    'HIGH_VALUE': {'time': 0.20, 'cost': 0.10, 'risk': 0.70},
+    'BULK':       {'time': 0.10, 'cost': 0.80, 'risk': 0.10},
+    'STANDARD':   {'time': 0.33, 'cost': 0.33, 'risk': 0.34},
+}
+
+def _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type='STANDARD'):
+    """
+    Min-Max / Baseline normalization for Multi-Objective Cost Function.
+    Ensures that Time, Cost, and Risk fall roughly between 0.0 and 1.0
+    so weights can be applied meaningfully without one metric dominating.
+    """
+    MAX_EXPECTED_TIME = 200.0  # hours (e.g. 8 days by sea)
+    MAX_EXPECTED_COST = 5000.0 # dollars
+    MAX_EXPECTED_RISK = 10.0   # risk multiplier (e.g. crisis spike max)
+
+    norm_time = edge_time / MAX_EXPECTED_TIME
+    norm_cost = edge_cost / MAX_EXPECTED_COST
+    norm_risk = edge_risk / MAX_EXPECTED_RISK
+
+    weights = CARGO_PROFILES.get(cargo_type.upper(), CARGO_PROFILES['STANDARD'])
+
+    score = (norm_time * weights['time']) + \
+            (norm_cost * weights['cost']) + \
+            (norm_risk * weights['risk'])
+
+    return score
+
+
 
 # ══════════════════════════════════════════════════════════════
 # CTR Tensor: Dynamic Cost & Time Functions
@@ -264,7 +298,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
              objective="FASTEST", blocked_nodes=None,
              # ── v3.0 CTR shipment parameters ──
              quantity=None, product_type=None, risk_score=0.0,
-             omega=None, max_budget=None):
+             omega=None, max_budget=None, cargo_type="STANDARD"):
     """
     Cargo-aware Dijkstra with CTR Tensor edge weighting.
     
@@ -273,7 +307,8 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     Otherwise, falls back to legacy static weights for backward compatibility.
     
     Implements:
-    - Dynamic W(e) = ω·Ĉ(e) + (1-ω)·T̂(e) weighting
+    - Dynamic W(e) = ω·Ĉ(e) + (1-ω)·T̂(e) weighting (Legacy)
+    - Phase 2 Dynamic Cargo Weighting: _calculate_edge_score
     - Cargo-mode incompatibility pruning
     - Budget constraint pruning (early exit)
     """
@@ -289,11 +324,6 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     Q = quantity if quantity is not None else DEFAULT_QUANTITY
     pt = product_type or DEFAULT_PRODUCT_TYPE
     R = risk_score
-    w = omega if omega is not None else (
-        0.0 if objective == "FASTEST" else
-        1.0 if objective == "CHEAPEST" else
-        DEFAULT_OMEGA
-    )
     budget_limit = max_budget if max_budget is not None else DEFAULT_MAX_BUDGET
 
     dist = {nid: float("inf") for nid in graph.nodes}
@@ -319,19 +349,26 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
                 if not is_cargo_compatible(mode, pt, Q):
                     continue
 
-                # Dynamic CTR weight
-                new_w = cur_w + compute_edge_weight(mode, d_km, Q, pt, R, w)
+                # ── Phase 1: Inject Live Crises (Risk Multipliers) ──
+                from scdo.simulation.crisis_manager import CrisisManager
+                cm = CrisisManager()
+                target_name = graph.nodes[nb]["name"]
+                multiplier = cm.active_risk_multipliers.get(target_name, 1.0)
 
-                # Compute actual cost for budget constraint pruning
+                # Compute actual cost, time, and risk with crisis multipliers
                 edge_cost = compute_edge_cost(mode, d_km, Q, pt, R)
-                new_accumulated_cost = cost_so_far[cur] + edge_cost
+                edge_time = compute_edge_time(mode, d_km, Q, R) * multiplier
+                edge_risk = multiplier * (1.0 + R)
+
+                # ── Phase 2: Dynamic Cargo Weighting ──
+                # Replaces previous omega calculation with cargo profile scoring
+                edge_score = _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type)
+                new_w = cur_w + edge_score
 
                 # ── Budget constraint early exit ──
+                new_accumulated_cost = cost_so_far[cur] + edge_cost
                 if new_accumulated_cost > budget_limit:
                     continue
-
-                # Also compute actual time for result enrichment
-                edge_time = compute_edge_time(mode, d_km, Q, R)
             else:
                 # ── Legacy mode ──
                 new_w = cur_w + _edge_weight(edge, objective)
