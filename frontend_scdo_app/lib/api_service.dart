@@ -4,6 +4,7 @@ import 'models.dart';
 
 class ApiService {
   static const String baseUrl = "https://paarthm007-scdo-api.hf.space/api";
+  // static const String baseUrl = "http://localhost:7860/api";
 
   Future<void> dispatchShipment(String cargoType) async {
     final response = await http.post(
@@ -31,6 +32,16 @@ class ApiService {
       return TickResponse.fromJson(jsonDecode(response.body));
     } else {
       throw Exception('Failed to tick simulation: ${response.body}');
+    }
+  }
+
+  Future<void> triggerOsintSync({bool demoMode = true}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/sync_osint?demo_mode=$demoMode'),
+      headers: {"Content-Type": "application/json"},
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to sync OSINT: ${response.body}');
     }
   }
 }

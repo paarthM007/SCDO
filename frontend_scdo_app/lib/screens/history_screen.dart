@@ -349,6 +349,7 @@ class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateM
                                             ),
                                           ),
 
+                                          if (isCompleted) ...[
                                             IconButton(
                                               icon: const Icon(Icons.rate_review, color: Colors.amberAccent, size: 22),
                                               tooltip: "Rate city risks",

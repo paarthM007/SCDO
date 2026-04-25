@@ -6,6 +6,8 @@ class ShipmentState {
   final double progressPercentage; // 0.0 to 1.0
   final List<String> routePlan;
   final List<String> freshLogs;
+  final bool hasRerouted;
+  final String? rerouteReason;
 
   ShipmentState.fromJson(Map<String, dynamic> json)
       : shipmentId = json['shipment_id'],
@@ -14,18 +16,22 @@ class ShipmentState {
         nextStepName = json['next_step_name'],
         progressPercentage = (json['progress_percentage'] as num).toDouble(),
         routePlan = List<String>.from(json['route_plan']),
-        freshLogs = List<String>.from(json['fresh_logs']);
+        freshLogs = List<String>.from(json['fresh_logs']),
+        hasRerouted = json['has_rerouted'] ?? false,
+        rerouteReason = json['reroute_reason'];
 }
 
 class TelemetryData {
   final double rollingMean;
   final double threshold;
   final List<double> history;
+  final bool isCrisis;
 
   TelemetryData.fromJson(Map<String, dynamic> json)
       : rollingMean = (json['rolling_mean'] as num).toDouble(),
         threshold = (json['threshold'] as num).toDouble(),
-        history = (json['history'] as List).map((e) => (e as num).toDouble()).toList();
+        history = (json['history'] as List).map((e) => (e as num).toDouble()).toList(),
+        isCrisis = json['is_crisis'] as bool? ?? false;
 }
 
 class GlobalState {

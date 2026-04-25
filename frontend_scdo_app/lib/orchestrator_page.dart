@@ -18,18 +18,12 @@ class OrchestratorPage extends StatelessWidget {
     // so we can safely read the controller here.
     final ctrl = context.watch<OrchestratorController>();
 
-    // Build a GlobalState from the controller's crises list.
-    // TelemetryCharts are empty until the backend sends data.
-    final globalState = GlobalState.fromJson({
-      'active_crises': ctrl.currentCrises,
-      'telemetry_charts': <String, dynamic>{},
-    });
-
     return OrchestratorDashboard(
       shipmentState: ctrl.currentShipment,
-      globalState: globalState,
+      globalState: ctrl.globalState,
       allLogs: ctrl.auditLogs,
       onDispatch: (cargo) => ctrl.startScenario(cargo),
+      onSyncOsint: () => ctrl.syncOsint(demoMode: true),
       // onTick is null — the heartbeat timer fires automatically.
       onTick: null,
     );

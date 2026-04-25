@@ -102,7 +102,8 @@ class _AppScaffoldState extends State<AppScaffold> {
   }
 
   Widget _buildSideNav() {
-    return Container(width: 260, color: GlassTheme.backgroundCard, child: Column(children: [
+    return Container(width: 260, color: GlassTheme.backgroundCard, child: SingleChildScrollView(
+      child: Column(children: [
       const SizedBox(height: 32),
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 40, height: 40, decoration: const BoxDecoration(shape: BoxShape.circle, color: GlassTheme.accentNeonGreen),
@@ -122,7 +123,7 @@ class _AppScaffoldState extends State<AppScaffold> {
       _navItem(Icons.person, 'My Profile', 6, "Your account"),
       _navDivider("LIVE"),
       _navItem(Icons.radar, 'Live Orchestrator', 7, "Real-time shipment control"),
-    ]));
+    ])));
   }
 
   Widget _navDivider(String label) {

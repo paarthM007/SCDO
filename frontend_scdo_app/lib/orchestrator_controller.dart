@@ -14,6 +14,7 @@ class OrchestratorController extends ChangeNotifier {
 
   // ── Exposed State ──────────────────────────────────────────────
   ShipmentState? currentShipment;
+  GlobalState? globalState;
   List<String> auditLogs = [];
   List<String> currentCrises = [];
 
@@ -41,8 +42,8 @@ class OrchestratorController extends ChangeNotifier {
       isRunning = true;
       notifyListeners();
 
-      // 3. Start heartbeat — 30 real seconds = 1 simulated hour
-      _ticker = Timer.periodic(const Duration(milliseconds: 30000), _onTick);
+      // 3. Start heartbeat — every 2 seconds
+      _ticker = Timer.periodic(const Duration(milliseconds: 2000), _onTick);
     } catch (e) {
       auditLogs.insert(0, '[ERROR] Dispatch failed: $e');
       notifyListeners();
@@ -55,6 +56,27 @@ class OrchestratorController extends ChangeNotifier {
     _ticker = null;
     isRunning = false;
     isFetching = false;
+  }
+
+  /// Manually trigger a global intelligence sweep (OSINT Sync).
+  Future<void> syncOsint({bool demoMode = true}) async {
+    if (isFetching) return;
+    isFetching = true;
+    notifyListeners();
+
+    try {
+      auditLogs.insert(0, '[OSINT] Initiating global intelligence sweep...');
+      notifyListeners();
+      
+      await _api.triggerOsintSync(demoMode: demoMode);
+      
+      auditLogs.insert(0, '[OSINT] Intelligence Sync Complete. Automated response engaged.');
+    } catch (e) {
+      auditLogs.insert(0, '[ERROR] OSINT Sync failed: $e');
+    } finally {
+      isFetching = false;
+      notifyListeners();
+    }
   }
 
   // ── Private Heartbeat ──────────────────────────────────────────
@@ -70,6 +92,7 @@ class OrchestratorController extends ChangeNotifier {
 
       if (response.shipments.isNotEmpty) {
         currentShipment = response.shipments.first;
+        globalState = response.globalState;
         currentCrises = response.globalState.activeCrises;
 
         // Update UI immediately with latest position / status
