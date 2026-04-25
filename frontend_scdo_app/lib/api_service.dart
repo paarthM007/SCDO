@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'models.dart';
 
 class ApiService {
-  static const String baseUrl = "https://paarthm007-scdo-api.hf.space"; // Adjust for device/emulator
+  static const String baseUrl = "https://paarthm007-scdo-api.hf.space/api";
 
   Future<void> dispatchShipment(String cargoType) async {
     final response = await http.post(

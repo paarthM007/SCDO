@@ -12,6 +12,8 @@ from scdo.routing.cities_data import get_all_nodes
 
 logger = logging.getLogger(__name__)
 
+
+
 # --- Global State Setup ---
 crisis_manager = CrisisManager()
 telemetry_monitor = TelemetryMonitor(crisis_manager)
