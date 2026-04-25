@@ -175,23 +175,6 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     final routeData = item[_selectedObjective];
     final hasRoute = routeData != null && !routeData.containsKey("error");
 
-    double? thisCost;
-    double? bestCost;
-    if (hasRoute) {
-      thisCost = (routeData["total_cost_usd"] as num?)?.toDouble();
-    }
-    final allComparison = (_data!["comparison"] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    for (var c in allComparison) {
-      final rd = c[_selectedObjective];
-      if (rd != null && !rd.containsKey("error")) {
-        final cost = (rd["total_cost_usd"] as num?)?.toDouble();
-        if (cost != null && (bestCost == null || cost < bestCost)) {
-          bestCost = cost;
-        }
-      }
-    }
-    final isBest = thisCost != null && bestCost != null && thisCost == bestCost;
-
     final rowColors = [GlassTheme.accentCyan, Colors.purpleAccent, Colors.orangeAccent, GlassTheme.accentNeonGreen, Colors.pinkAccent, Colors.tealAccent];
     final rowColor = rowColors[index % rowColors.length];
 
@@ -199,7 +182,7 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
       margin: const EdgeInsets.only(bottom: 4),
       child: GlassContainer(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-        borderColor: isBest ? GlassTheme.accentNeonGreen.withOpacity(0.5) : Colors.white.withOpacity(0.05),
+        borderColor: Colors.white.withOpacity(0.05),
         child: Row(
           children: [
             SizedBox(
@@ -214,19 +197,7 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
             ),
             Expanded(
               flex: 3,
-              child: Row(
-                children: [
-                  Text(supplier, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  if (isBest) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: GlassTheme.accentNeonGreen.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                      child: const Text("★ BEST", style: TextStyle(color: GlassTheme.accentNeonGreen, fontSize: 9, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ],
-              ),
+              child: Text(supplier, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             ),
             _dataCell(hasRoute ? "${routeData['total_distance_km']} km" : "—"),
             _dataCell(hasRoute ? "${routeData['total_time_readable']}" : "—"),
