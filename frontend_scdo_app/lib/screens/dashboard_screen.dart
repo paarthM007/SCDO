@@ -23,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<String> _modes = ["ship"];
 
   String _cargoType = "general";
+  final TextEditingController _quantityController = TextEditingController(text: "100");
 
   bool _isLoadingSim = false;
   String _statusMessage = "";
@@ -82,6 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           "cities": cities,
           "modes": _modes,
           "cargo_type": _cargoType,
+          "quantity": int.tryParse(_quantityController.text) ?? 100,
           "source": "manual_builder"
         }),
       );
@@ -137,6 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (var c in _cityControllers) {
       c.dispose();
     }
+    _quantityController.dispose();
     super.dispose();
   }
 
@@ -243,6 +246,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _sectionLabel("CARGO", "What are you shipping?", Icons.inventory_2, GlassTheme.accentCyan),
           const SizedBox(height: 16),
+          TextField(
+            controller: _quantityController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: "Quantity (Units)",
+              prefixIcon: Icon(Icons.production_quantity_limits, color: GlassTheme.textSecondary),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text("Product Type:", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12)),
+          const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: _cargoTypes.map((type) {
             final isSelected = _cargoType == type;
             return InkWell(
