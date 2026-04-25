@@ -14,6 +14,15 @@ WEIGHT_REDDIT = 0.2
 
 def _city_to_country(city_name):
     """Best-effort city->country mapping."""
+    try:
+        from scdo.routing.cities_data import get_all_nodes
+        nodes = get_all_nodes()
+        for node in nodes:
+            if node["name"].lower() == city_name.lower():
+                return node.get("country", "")
+    except ImportError:
+        pass
+        
     known = {
         "mumbai": "India", "delhi": "India", "chennai": "India",
         "dubai": "UAE", "rotterdam": "Netherlands", "singapore": "Singapore",
@@ -54,9 +63,19 @@ def compute_sentiment_risk(cities):
 
     # 3. Process results and apply mathematical weights
     for city in cities:
-        # Retrieve independent JSON objects from Gemini
-        news_info = results.get(f"{city}_news", {"risk_score": 0.1, "primary_hazard": "None"})
-        reddit_info = results.get(f"{city}_reddit", {"risk_score": 0.1, "primary_hazard": "None"})
+        # Gemini sometimes lowercases keys, so we check for both original and lowercase
+        news_key = f"{city}_news"
+        reddit_key = f"{city}_reddit"
+        
+        # Helper to do case-insensitive lookup
+        def get_ignore_case(d, key, default_val):
+            for k, v in d.items():
+                if k.lower() == key.lower():
+                    return v
+            return default_val
+            
+        news_info = get_ignore_case(results, news_key, {"risk_score": 0.1, "primary_hazard": "None"})
+        reddit_info = get_ignore_case(results, reddit_key, {"risk_score": 0.1, "primary_hazard": "None"})
         
         news_score = _parse_llm_score(news_info.get("risk_score", 0.1))
         reddit_score = _parse_llm_score(reddit_info.get("risk_score", 0.1))

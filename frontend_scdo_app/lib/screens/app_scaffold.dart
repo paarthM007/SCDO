@@ -86,13 +86,29 @@ class _AppScaffoldState extends State<AppScaffold> {
   }
 
   Widget _buildTopBar() {
+    final user = FirebaseAuth.instance.currentUser;
+    final firstName = user?.displayName?.split(' ').first ?? 'User';
+
     return Container(
       height: 80, padding: const EdgeInsets.symmetric(horizontal: 32),
       decoration: BoxDecoration(color: GlassTheme.backgroundDark, border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(_titles[_selectedIndex], style: Theme.of(context).textTheme.headlineMedium),
+        Row(
+          children: [
+            Text(_titles[_selectedIndex], style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(width: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: GlassTheme.accentCyan.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: GlassTheme.accentCyan.withOpacity(0.2)),
+              ),
+              child: Text("Hi $firstName!", style: const TextStyle(color: GlassTheme.accentCyan, fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+          ],
+        ),
         Row(children: [
-          IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
           const SizedBox(width: 16),
           ElevatedButton.icon(onPressed: _signOut, icon: const Icon(Icons.logout, size: 18), label: const Text('Sign Out'),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.1), foregroundColor: Colors.white)),
