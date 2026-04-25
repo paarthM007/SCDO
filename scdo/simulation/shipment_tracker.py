@@ -105,26 +105,34 @@ class ShipmentOrchestrator:
             shipment.progress_on_step += hours
             
             # Use while loop in case 'hours' is large enough to complete multiple steps
-            while shipment.progress_on_step >= step_duration and shipment.status != 'DELIVERED':
+            # Keep advancing steps as long as we have overflow time
+            while shipment.current_step_index < len(shipment.route_plan):
+                current_step = shipment.route_plan[shipment.current_step_index]
                 
-                # --- TELEMETRY INTEGRATION HOOK ---
-                # Trigger anomaly detection right when a shipment finishes a Node
-                if isinstance(current_step, NodeStep) and self.telemetry_monitor:
-                    actual_hours_spent = step_duration  # In a full simulation, this includes stochastic noise
-                    self.telemetry_monitor.record_dwell_time(current_step.name, actual_hours_spent, shipment=shipment)
-                # ----------------------------------
+                # SAFETY NET: Prevent infinite loops if a step has 0 duration
+                step_duration = max(0.001, current_step.time_h)
+            
+                if shipment.progress_on_step >= step_duration:
+                    
+                    # --- TELEMETRY INTEGRATION HOOK ---
+                    # Trigger anomaly detection right when a shipment finishes a Node
+                    if isinstance(current_step, NodeStep) and self.telemetry_monitor:
+                        actual_hours_spent = step_duration  # In a full simulation, this includes stochastic noise
+                        self.telemetry_monitor.record_dwell_time(current_step.name, actual_hours_spent, shipment=shipment)
+                    # ----------------------------------
 
-                shipment.progress_on_step -= step_duration
-                shipment.current_step_index += 1
-                
-                if shipment.current_step_index >= len(shipment.route_plan):
-                    shipment.status = 'DELIVERED'
-                    shipment.progress_on_step = 0.0
-                    break
+                    # We finished this step! Subtract time and move to the next
+                    shipment.progress_on_step -= step_duration
+                    shipment.current_step_index += 1
+                    
+                    if shipment.current_step_index >= len(shipment.route_plan):
+                        shipment.status = 'DELIVERED'
+                        shipment.progress_on_step = 0.0
+                        break
                 else:
-                    current_step = shipment.route_plan[shipment.current_step_index]
-                    step_duration = current_step.time_h
-
+                    # The truck is still moving along the current step. 
+                    # Break the loop and wait for the next API tick from Flutter.
+                    break
     def evaluate_active_routes(self, crisis_node: str):
         """
         Triggered when CrisisManager registers a new anomaly.
