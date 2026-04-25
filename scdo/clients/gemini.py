@@ -89,13 +89,30 @@ class GeminiClient:
             return {city: {"risk_score": 0.05, "primary_hazard": "Analysis Failed"}
                     for city in city_headlines}
 
-    def _build_prompt(self, city_headlines):
+    def _build_prompt(self, batch_intelligence):
         lines = [
-            "Evaluate supply-chain disruption risk for these cities based on headlines.",
-            "Score 0.0 (safe) to 1.0 (catastrophic).",
-            'Return JSON: {"City": {"risk_score": float, "primary_hazard": string}}',
-            "\nHeadlines:"
+            "You are a supply-chain risk intelligence analyst. Evaluate the disruption risk for these specific locations based on the provided intelligence sources.",
+            "Based *only* on the provided intelligence briefs, classify the risk level as LOW, MEDIUM, or HIGH.",
+            "- LOW: No significant events reported. Standard operations.",
+            "- MEDIUM: Reports of delays, minor disruptions, or isolated incidents that could slow transit.",
+            "- HIGH: Reports of major conflict, port closures, severe weather, or widespread unrest making transit dangerous.",
+            "",
+            "You MUST return a JSON object where the keys are the exact source IDs provided (e.g., 'mumbai_news', 'tehran_reddit').",
+            "Use this exact schema for the values:",
+            '{',
+            '  "SOURCE_ID": {',
+            '    "risk_score": "LOW|MEDIUM|HIGH",',
+            '    "primary_hazard": "Short description of the main threat, or \'None\'",',
+            '    "reasoning": "You MUST justify your score by citing specific evidence from the brief. This is required to prevent bias." ',
+            '  }',
+            '}',
+            "\nINTELLIGENCE BRIEFS:"
         ]
-        for city, hl in city_headlines.items():
-            lines.append(f"### {city}\n" + "\n".join(hl[:10]))
+        
+        # Iterate over the dictionary we passed from sentiment_risk.py
+        for source_id, brief_text in batch_intelligence.items():
+            lines.append(f"\n### {source_id}")
+            # brief_text is already a formatted string, so we just append it directly!
+            lines.append(brief_text)
+            
         return "\n".join(lines)
