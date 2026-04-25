@@ -47,19 +47,29 @@ class GeminiClient:
             )
 
         try:
-            try:
-                # Primary: Gemini 2.0 Flash
-                response = _call_gemini("gemini-2.0-flash")
-            except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    logger.warning("Gemini 2.0 Flash quota exhausted. Falling back to Gemini 1.5 Flash...")
-                    # Fallback: Gemini 1.5 Flash
-                    response = _call_gemini("gemini-1.5-flash")
-                else:
-                    raise e
+            # Try models in order of preference
+            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+            response = None
+            last_error = None
 
+            for model_id in models_to_try:
+                try:
+                    response = _call_gemini(model_id)
+                    if response and response.text:
+                        break # Success!
+                except Exception as e:
+                    last_error = str(e)
+                    # If it's a quota error, log it and try next
+                    if "429" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+                        logger.warning(f"Gemini {model_id} quota exhausted. Trying next model...")
+                    elif "404" in last_error or "NOT_FOUND" in last_error:
+                        logger.warning(f"Gemini {model_id} not found. Trying next model...")
+                    else:
+                        # For other errors, maybe it's a prompt issue, but let's try next anyway
+                        logger.warning(f"Gemini {model_id} failed: {last_error}. Trying next model...")
+            
             if not response or not response.text:
-                raise ValueError("Empty response from Gemini")
+                raise ValueError(f"All Gemini models failed. Last error: {last_error}")
             
             return json.loads(response.text)
         except Exception as e:
@@ -67,9 +77,9 @@ class GeminiClient:
             if "API key not valid" in error_msg:
                 logger.error("Gemini API Key is INVALID. Please check your .env file.")
             elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                logger.error("Gemini Quota Exhausted (All models). Please check your billing or wait.")
+                logger.error("Gemini Quota Exhausted on all models.")
             else:
-                logger.error("Gemini evaluation failed: %s", error_msg)
+                logger.error("Gemini evaluation failed after multiple attempts: %s", error_msg)
             
             return {city: {"risk_score": 0.05, "primary_hazard": "Analysis Failed"}
                     for city in city_headlines}
