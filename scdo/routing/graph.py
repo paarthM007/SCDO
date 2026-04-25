@@ -405,6 +405,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
                 edge_cost = edge["cost_usd"]
                 edge_time = edge["time_h"]
                 new_accumulated_cost = cost_so_far[cur] + edge_cost
+                new_accumulated_time = time_so_far[cur] + edge_time
 
             if new_w < dist[nb]:
                 dist[nb] = new_w
