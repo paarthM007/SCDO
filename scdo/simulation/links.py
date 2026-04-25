@@ -82,7 +82,7 @@ class RoadLink(TransportLink):
                  noise_mean_h=0.5, noise_std_h=0.2,
                  fallback_mean_h=15.0, fallback_std_h=3.0,
                  base_cost_fallback=250.0, cost_per_hour=12.0):
-        super().__init__(env, src, dst, "ROAD", base_time, base_cost)
+        super().__init__(env, src, dst, "HIGHWAY", base_time, base_cost)
         self.google_client = google_client
         self.noise_mean_h = noise_mean_h
         self.noise_std_h = noise_std_h
@@ -168,7 +168,7 @@ class ShipLink(TransportLink):
     def __init__(self, env, src, dst, sea_client=None, base_time=None, base_cost=None,
                  min_hours=100.0, mode_hours=120.0, max_hours=180.0,
                  fuel_cost_fallback=1500.0, cost_per_hour=2.5):
-        super().__init__(env, src, dst, "SHIP", base_time, base_cost)
+        super().__init__(env, src, dst, "SEA", base_time, base_cost)
         self.sea_client = sea_client
         self.min_hours = min_hours
         self.mode_hours = mode_hours

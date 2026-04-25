@@ -71,6 +71,7 @@ VARIABLE_RATE = {
     "HIGHWAY": 0.0005,   # $/unit-km  (trucks, moderate)
     "SEA":     0.00008,  # $/unit-km  (ships, cheapest per unit)
     "AIR":     0.003,    # $/unit-km  (planes, most expensive)
+    "RAIL":    0.0002,   # $/unit-km  (trains, efficient)
 }
 
 # ── Speed Constants s(mode) — km/h ────────────────────────────
@@ -78,6 +79,7 @@ SPEED_CONSTANTS = {
     "HIGHWAY": 65.0,
     "SEA":     46.0,
     "AIR":     850.0,
+    "RAIL":    45.0,
 }
 
 # ── Processing Time P(mode, Q) parameters ─────────────────────
