@@ -48,7 +48,13 @@ class GeminiClient:
 
         try:
             # Try models in order of preference
-            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+            models_to_try = [
+                "gemini-3-flash", 
+                "gemini-2.5-flash", 
+                "gemini-2.0-flash", 
+                "gemini-1.5-flash", 
+                "gemini-1.5-flash-8b"
+            ]
             response = None
             last_error = None
 
