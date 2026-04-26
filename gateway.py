@@ -640,7 +640,11 @@ def api_tick():
     telemetry_charts = {}
     active_crises = list(crises_after)
     # Include all route nodes that have been visited or are currently monitored
-    nodes_to_chart = active_route_nodes | set(active_crises) | set(telemetry_monitor.live_windows.keys())
+    # Only show nodes that are part of an active route, currently in crisis, 
+    # or part of the core demo scenario hubs. This keeps the Dwell Time Monitor 
+    # clean and focused for presentations.
+    nodes_to_chart = active_route_nodes | set(active_crises) | set(_demo_overrides.keys())
+    
     for node in nodes_to_chart:
         if node in telemetry_monitor.baselines and node in telemetry_monitor.live_windows:
             windows = list(telemetry_monitor.live_windows[node])
