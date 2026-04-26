@@ -82,13 +82,12 @@ DEMO_CRISIS_PATH = [
 
 class ActiveShipment:
     def __init__(self, shipment_id: str, cargo_type: str, route_plan: List[Union[NodeStep, LinkStep]],
-                 quantity: float = 100.0, product_type: str = "general",
+                 product_type: str = "general",
                  max_budget: float = float('inf'), deadline_h: float = float('inf'),
                  omega: float = 0.5):
         self.shipment_id = shipment_id
         self.cargo_type = cargo_type
         self.route_plan = route_plan
-        self.quantity = quantity
         self.product_type = product_type
         self.max_budget = max_budget
         self.deadline_h = deadline_h
@@ -214,7 +213,6 @@ class ShipmentOrchestrator:
                     origin=divert_node.name,
                     destination=final_node.name,
                     cargo_type=shipment.cargo_type,
-                    quantity=shipment.quantity,
                     product_type=shipment.product_type,
                     omega=shipment.omega,
                     max_budget=shipment.max_budget,

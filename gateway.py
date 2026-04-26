@@ -156,7 +156,6 @@ def api_simulate():
             "path_edges": data.get("path_edges", []),
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
-            # v3.0 CTR parameters
             "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
@@ -520,8 +519,7 @@ def api_dispatch():
     route_resp = find_route(
         origin=origin,
         destination=destination,
-        cargo_type=cargo_type,
-        quantity=1000
+        cargo_type=cargo_type
     )
     
     if "error" in route_resp:
@@ -546,7 +544,6 @@ def api_dispatch():
         shipment_id=shipment_id, 
         cargo_type=cargo_type, 
         route_plan=route_plan,
-        quantity=1000, # Example value, should ideally come from request
         product_type=cargo_type, # Using cargo_type as product_type for now
         max_budget=float('inf'),
         deadline_h=float('inf'),

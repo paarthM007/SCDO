@@ -168,7 +168,7 @@ def find_route(origin, destination, mode_pref="BEST",
                # ── v3.0 CTR shipment parameters ──
                product_type=None, risk_score=0.0,
                omega=None, max_budget=None, deadline_h=None,
-               cargo_type="STANDARD", quantity=None):
+               cargo_type="STANDARD"):
     """
     Find a single route between two city names.
     Supports blocked_nodes for Functionality 2.
@@ -203,7 +203,6 @@ def find_route(origin, destination, mode_pref="BEST",
     try:
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
-            quantity=quantity,
             product_type=product_type,
             risk_score=risk_score, omega=omega, max_budget=max_budget,
             deadline_h=deadline_h, cargo_type=cargo_type
@@ -234,7 +233,7 @@ def find_route(origin, destination, mode_pref="BEST",
 def find_alternate_route(origin, destination, blocked_nodes,
                          cargo_type="general", mode_pref=None,
                          # ── v3.0 CTR parameters ──
-                         quantity=0.0, product_type=None,
+                         product_type=None,
                          budget=None, deadline_h=None, omega=None):
     """
     Functionality 2: Find best alternate route avoiding blocked cities.
@@ -267,7 +266,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 1. Fastest
     r_fast = find_route(
         origin, destination, effective_mode, "FASTEST", blocked_nodes,
-        product_type=effective_product, quantity=quantity,
+        product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -276,7 +275,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 2. Cheapest
     r_cheap = find_route(
         origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
-        product_type=effective_product, quantity=quantity,
+        product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -290,7 +289,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
             temp_blocked = list(blocked_nodes or []) + [mid_node_name]
             alt_cheap = find_route(
                 origin, destination, effective_mode, "CHEAPEST", temp_blocked,
-                product_type=effective_product, quantity=quantity,
+                product_type=effective_product,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
                 cargo_type=phase_2_cargo
             )
@@ -301,7 +300,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
     # 3. Balanced
     r_bal = find_route(
         origin, destination, effective_mode, "BALANCED", blocked_nodes,
-        product_type=effective_product, quantity=quantity,
+        product_type=effective_product,
         risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
@@ -315,7 +314,7 @@ def find_alternate_route(origin, destination, blocked_nodes,
             temp_blocked = list(blocked_nodes or []) + [first_int_name]
             alt_bal = find_route(
                 origin, destination, effective_mode, "BALANCED", temp_blocked,
-                product_type=effective_product, quantity=quantity,
+                product_type=effective_product,
                 risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
                 cargo_type=phase_2_cargo
             )
