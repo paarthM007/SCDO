@@ -21,6 +21,7 @@ from scdo.config import (
     DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
     DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H, CARGO_REQUIREMENTS,
 )
+from scdo.simulation.crisis_manager import CrisisManager
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,6 @@ def find_route(origin, destination, mode_pref="BEST",
     allowed = MODE_SETS.get(mode_pref.upper(), {"HIGHWAY", "SEA", "AIR"})
 
     # Resolve blocked node names to IDs
-    from scdo.simulation.crisis_manager import CrisisManager
     cm = CrisisManager()
     
     all_blocked_names = set(blocked_nodes or [])

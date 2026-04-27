@@ -505,6 +505,11 @@ def api_cities():
 @app.route("/dispatch", methods=["POST"])
 @app.route("/api/dispatch", methods=["POST"])
 def api_dispatch():
+    uid = _get_user()
+    if not uid:
+        logger.warning("Unauthorized /dispatch attempt from %s", request.remote_addr)
+        return _err("Unauthorized", 401)
+
     data = request.json or {}
     cargo_type = data.get("cargo_type", "PERISHABLE")
     origin = data.get("origin")
@@ -566,6 +571,11 @@ def api_dispatch():
 @app.route("/tick", methods=["POST"])
 @app.route("/api/tick", methods=["POST"])
 def api_tick():
+    uid = _get_user()
+    if not uid:
+        logger.warning("Unauthorized /tick attempt from %s", request.remote_addr)
+        return _err("Unauthorized", 401)
+
     data = request.json or {}
     hours_to_advance = float(data.get("hours_to_advance", 1.0)) * 2.0
     
@@ -664,10 +674,11 @@ def api_tick():
 
 @app.route('/api/sync_osint', methods=['POST'])
 def api_sync_osint():
-    """
-    Decoupled endpoint for OSINT. Fetches LIVE data, but guarantees a 
-    demonstrable crisis outcome if demo_mode is engaged.
-    """
+    uid = _get_user()
+    if not uid:
+        logger.warning("Unauthorized /sync_osint attempt from %s", request.remote_addr)
+        return _err("Unauthorized", 401)
+
     demo_mode = request.args.get('demo_mode', default='false').lower() == 'true'
     target_city = "JNPT" 
     
