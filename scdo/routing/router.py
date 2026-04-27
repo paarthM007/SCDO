@@ -21,6 +21,7 @@ from scdo.config import (
     DEFAULT_PRODUCT_TYPE, DEFAULT_OMEGA,
     DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H, CARGO_REQUIREMENTS,
 )
+from scdo.simulation.crisis_manager import CrisisManager
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,6 @@ def find_route(origin, destination, mode_pref="BEST",
     allowed = MODE_SETS.get(mode_pref.upper(), {"HIGHWAY", "SEA", "AIR"})
 
     # Resolve blocked node names to IDs
-    from scdo.simulation.crisis_manager import CrisisManager
     cm = CrisisManager()
     
     all_blocked_names = set(blocked_nodes or [])
@@ -200,12 +200,24 @@ def find_route(origin, destination, mode_pref="BEST",
         else:
             logger.warning(f"Blocked node '{bn}' not found in graph, skipping")
 
+    # ── v3.0: Map objective to omega if not provided ──
+    if omega is None:
+        obj_up = objective.upper()
+        if obj_up == "CHEAPEST":
+            omega = 1.0   # 100% Cost focus
+        elif obj_up == "FASTEST":
+            omega = 0.0   # 100% Time focus
+        elif obj_up == "BALANCED":
+            omega = 0.5   # 50/50 balance
+        else:
+            omega = 0.5
+
     try:
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
             product_type=product_type,
-            risk_score=risk_score, omega=omega, max_budget=max_budget,
-            deadline_h=deadline_h, cargo_type=cargo_type
+            risk_score=risk_score, omega=omega, max_budget=None,
+            deadline_h=None, cargo_type=cargo_type
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -253,74 +265,138 @@ def find_alternate_route(origin, destination, blocked_nodes,
         "vehicles": "STANDARD", "general": "STANDARD", "electronics": "HIGH_VALUE",
     }
     
-    effective_mode = mode_pref or CARGO_MODE_MAP.get(cargo_type, "BEST")
+    # Use BEST by default to allow diversification across modes.
+    effective_mode = mode_pref or "BEST"
     effective_product = product_type or cargo_type
     phase_2_cargo = PHASE2_MAP.get(cargo_type, "STANDARD")
+    eff_omega = omega if omega is not None else 0.5
 
-    results = {}
+    # We will find 3 distinct routes using the SAME omega preference,
+    # as requested, and then rank them by their actual metrics.
     
-    def _is_duplicate(r1, r2):
-        if not r1 or not r2 or "error" in r1 or "error" in r2: return False
-        return [e["to_id"] for e in r1.get("path_edges", [])] == [e["to_id"] for e in r2.get("path_edges", [])]
-
-    # 1. Fastest
-    r_fast = find_route(
-        origin, destination, effective_mode, "FASTEST", blocked_nodes,
-        product_type=effective_product,
-        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
-        cargo_type=phase_2_cargo
-    )
-    results["fastest"] = r_fast
-
-    # 2. Cheapest
-    r_cheap = find_route(
-        origin, destination, effective_mode, "CHEAPEST", blocked_nodes,
-        product_type=effective_product,
-        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
-        cargo_type=phase_2_cargo
-    )
-    
-    # Diversify Cheapest if duplicate
-    if _is_duplicate(r_fast, r_cheap):
-        edges = r_fast.get("path_edges", [])
-        if len(edges) > 1:
-            # Block the middle intermediate node
-            mid_node_name = edges[len(edges) // 2 - 1]["to"]
-            temp_blocked = list(blocked_nodes or []) + [mid_node_name]
-            alt_cheap = find_route(
-                origin, destination, effective_mode, "CHEAPEST", temp_blocked,
-                product_type=effective_product,
-                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
-                cargo_type=phase_2_cargo
-            )
-            if "error" not in alt_cheap:
-                r_cheap = alt_cheap
-    results["cheapest"] = r_cheap
-
-    # 3. Balanced
-    r_bal = find_route(
+    # 1. Primary Balanced Route (Best for the given omega)
+    r_primary = find_route(
         origin, destination, effective_mode, "BALANCED", blocked_nodes,
         product_type=effective_product,
-        risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+        risk_score=0.0, omega=eff_omega, max_budget=budget, deadline_h=deadline_h,
         cargo_type=phase_2_cargo
     )
     
-    # Diversify Balanced if duplicate
-    if _is_duplicate(r_bal, r_fast) or _is_duplicate(r_bal, r_cheap):
-        edges = r_fast.get("path_edges", [])
-        if len(edges) > 1:
-            # Block the first intermediate node
-            first_int_name = edges[0]["to"]
-            temp_blocked = list(blocked_nodes or []) + [first_int_name]
-            alt_bal = find_route(
-                origin, destination, effective_mode, "BALANCED", temp_blocked,
+    candidates = []
+    if "error" not in r_primary:
+        candidates.append(r_primary)
+
+    # 2. Find Alternative 1 (Try a different primary mode for diversity)
+    r_alt1 = {"error": "No mode-switched alternative found"}
+    if candidates:
+        primary_modes = candidates[0].get("modes_used", [])
+        alt_mode = "BEST"
+        if "AIR" in primary_modes:
+            alt_mode = "SEA" # Force a sea/land route if primary was Air
+        elif "SEA" in primary_modes:
+            alt_mode = "AIR" # Force an air route if primary was Sea
+            
+        alt_mode = "SEA" if "AIR" in primary_modes else "AIR"
+        r_alt1 = find_route(
+            origin, destination, alt_mode, "BALANCED", blocked_nodes,
+            product_type=effective_product,
+            risk_score=0.0, omega=eff_omega, max_budget=budget, deadline_h=deadline_h,
+            cargo_type=phase_2_cargo
+        )
+        if "error" not in r_alt1:
+            candidates.append(r_alt1)
+
+    # 3. Find Alternative 2 (Force a different path via node blocking)
+    r_alt2 = {"error": "No secondary alternative found"}
+    if candidates:
+        # Collect all nodes from all successful candidates so far
+        nodes_to_avoid = set(blocked_nodes or [])
+        for c in candidates:
+            for e in c.get("path_edges", []):
+                if e["from"] != origin and e["from"] != destination:
+                    nodes_to_avoid.add(e["from"])
+        
+        # Identify if we are stuck with only 1-hop paths so far
+        is_stuck_with_1_hop = all(len(c.get("path_edges", [])) == 1 for c in candidates)
+        
+        # If we lack variety or are stuck with direct legs, force a multi-hop search
+        if len(candidates) < 2 or is_stuck_with_1_hop:
+            # Force block a pool of major hubs to see if a multi-hop route exists
+            for hub in ["Dubai", "Singapore", "Hong Kong", "Istanbul", "Mumbai", "London", "Doha"]:
+                if hub != origin and hub != destination:
+                    nodes_to_avoid.add(hub)
+
+        r_alt2 = find_route(
+            origin, destination, effective_mode, "BALANCED", list(nodes_to_avoid),
+            product_type=effective_product,
+            risk_score=0.0, omega=eff_omega, max_budget=budget, deadline_h=deadline_h,
+            cargo_type=phase_2_cargo
+        )
+    
+    if "error" not in r_alt2:
+        candidates.append(r_alt2)
+
+    # 4. Final Selection and Ranking
+    # Filter for uniqueness (include mode in uniqueness key)
+    unique_candidates = []
+    seen_paths = set()
+    for c in candidates:
+        if "error" in c: continue
+        # Path signature includes nodes AND modes
+        path_sig = "|".join([f"{e['to']}:{e['mode']}" for e in c.get("path_edges", [])])
+        if path_sig not in seen_paths:
+            unique_candidates.append(c)
+            seen_paths.add(path_sig)
+
+    # If we still only have one, try one last time with a slightly different omega 
+    # to see if that reveals a different edge preference in the CTR tensor
+    if len(unique_candidates) < 2:
+        for test_omega in [0.1, 0.9]:
+            r_last = find_route(
+                origin, destination, effective_mode, "BALANCED", blocked_nodes,
                 product_type=effective_product,
-                risk_score=0.0, omega=omega, max_budget=budget, deadline_h=deadline_h,
+                risk_score=0.0, omega=test_omega, max_budget=budget, deadline_h=deadline_h,
                 cargo_type=phase_2_cargo
             )
-            if "error" not in alt_bal and not _is_duplicate(alt_bal, r_cheap):
-                r_bal = alt_bal
-    results["balanced"] = r_bal
+            if "error" not in r_last:
+                path_sig = "|".join([f"{e['to']}:{e['mode']}" for e in r_last.get("path_edges", [])])
+                if path_sig not in seen_paths:
+                    unique_candidates.append(r_last)
+                    seen_paths.add(path_sig)
+                    if len(unique_candidates) >= 3: break
+
+    # Map to result slots
+    if not unique_candidates:
+        return {
+            "fastest": {"error": "No routes found"},
+            "cheapest": {"error": "No routes found"},
+            "balanced": {"error": "No routes found"}
+        }
+
+    # Rank them
+    # Balanced = the one found with the actual eff_omega (usually the first one)
+    balanced = unique_candidates[0]
+    
+    # Sort by time for Fastest
+    fastest = sorted(unique_candidates, key=lambda x: x.get("total_time_h", float('inf')))[0]
+    # Sort by cost for Cheapest
+    cheapest = sorted(unique_candidates, key=lambda x: x.get("total_cost_usd", float('inf')))[0]
+
+    # Ensure variety in the slots if possible
+    # (If we have 2 unique routes, don't show the same one in all 3 if we can avoid it)
+    results = {
+        "balanced": balanced,
+        "fastest": fastest,
+        "cheapest": cheapest
+    }
+    
+    # If we have exactly 2 unique, assign the second one to the slot it fits best
+    if len(unique_candidates) == 2:
+        alt = unique_candidates[1]
+        if alt["total_time_h"] < balanced["total_time_h"]:
+            results["fastest"] = alt
+        if alt["total_cost_usd"] < balanced["total_cost_usd"]:
+            results["cheapest"] = alt
 
     graph = get_graph()
     src_id = find_node_id(graph, origin)

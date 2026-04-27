@@ -16,6 +16,7 @@ from scdo.config import (
     DEFAULT_OMEGA, DEFAULT_MAX_BUDGET, DEFAULT_DEADLINE_H,
     CARGO_REQUIREMENTS,
 )
+from scdo.simulation.crisis_manager import CrisisManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ AIR_OVERHEAD_H = 2.0
 
 MAX_HIGHWAY_KM = 300
 MAX_CROSS_BORDER_KM = 120
-MAX_SEA_KM = 8000
+MAX_SEA_KM = 10000
 MAX_AIR_KM = 12000
 
 # Realistic freight cost per km (USD) for commercial cargo
@@ -36,12 +37,12 @@ COST_PER_KM = {"HIGHWAY": 0.18, "SEA": 0.035, "AIR": 0.45}
 MODE_FIXED_COST = {"HIGHWAY": 25, "SEA": 350, "AIR": 150}
 
 OCEAN_ZONES = {
-    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia"],
+    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia", "Egypt", "Singapore", "Maharashtra", "Gujarat", "Tamil Nadu", "Kerala", "West Bengal", "Andhra Pradesh", "Goa", "Karnataka", "Odisha"],
     "Pacific Ocean": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Australia","New Zealand","USA","Canada","Mexico","Peru","Chile","Ecuador","Colombia","Panama"],
-    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland"],
+    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland", "Panama"],
     "Mediterranean": ["Spain","France","Italy","Greece","Turkey","Lebanon","Israel","Egypt","Libya","Tunisia","Algeria","Morocco","Malta","Cyprus","Croatia","Slovenia"],
     "Baltic Sea": ["Germany","Poland","Russia","Sweden","Finland","Denmark","Estonia","Latvia","Lithuania"],
-    "Asia Pacific": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Myanmar","India","Sri Lanka","Bangladesh"],
+    "Asia Pacific": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Myanmar","India","Sri Lanka","Bangladesh", "Maharashtra", "Gujarat", "Tamil Nadu", "Kerala", "West Bengal", "Andhra Pradesh", "Goa", "Karnataka", "Odisha"],
 }
 
 COUNTRY_TO_OCEANS: Dict[str, List[str]] = {}
@@ -346,6 +347,9 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     dist[src_id] = 0.0
     heap = [(0.0, src_id)]
 
+    # Cache CrisisManager singleton outside the loop for performance
+    cm = CrisisManager()
+
     while heap:
         cur_w, cur = heapq.heappop(heap)
         if cur_w > dist[cur]: continue
@@ -366,42 +370,32 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
             mode = edge["mode"]
             d_km = edge["dist_km"]
 
-            if True: # CTR mode is standard
-                # ── v3.0 Cargo-aware pruning ──
-                if not is_cargo_compatible(mode, pt):
-                    continue
+            # ── v3.0 Cargo-aware pruning ──
+            if not is_cargo_compatible(mode, pt):
+                continue
 
-                # ── Phase 1: Inject Live Crises (Risk Multipliers) ──
-                from scdo.simulation.crisis_manager import CrisisManager
-                cm = CrisisManager()
-                target_name = graph.nodes[nb]["name"]
-                multiplier = cm.active_risk_multipliers.get(target_name, 1.0)
+            # ── Phase 1: Inject Live Crises (Risk Multipliers) ──
+            target_name = graph.nodes[nb]["name"]
+            multiplier = cm.active_risk_multipliers.get(target_name, 1.0)
 
-                # Compute actual cost, time, and risk with crisis multipliers
-                edge_cost = compute_edge_cost(mode, d_km, pt, R)
-                edge_time = compute_edge_time(mode, d_km, R) * multiplier
-                edge_risk = multiplier * (1.0 + R)
+            # Compute actual cost, time, and risk with crisis multipliers
+            edge_cost = compute_edge_cost(mode, d_km, pt, R)
+            edge_time = compute_edge_time(mode, d_km, R) * multiplier
+            edge_risk = multiplier * (1.0 + R)
 
-                # ── Phase 2: Dynamic Cargo Weighting ──
-                # Replaces previous omega calculation with cargo profile scoring
-                edge_score = _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type, omega=omega)
-                new_w = cur_w + edge_score
+            # ── Phase 2: Dynamic Cargo Weighting ──
+            # Replaces previous omega calculation with cargo profile scoring
+            edge_score = _calculate_edge_score(edge_time, edge_cost, edge_risk, cargo_type, omega=omega)
+            new_w = cur_w + edge_score
 
-                # ── Constraint early exit (Budget & Deadline) ──
-                new_accumulated_cost = cost_so_far[cur] + edge_cost
-                new_accumulated_time = time_so_far[cur] + edge_time
-                
-                if new_accumulated_cost > budget_limit:
-                    continue
-                if deadline_h is not None and new_accumulated_time > deadline_h:
-                    continue
-            else:
-                # ── Legacy mode ──
-                new_w = cur_w + _edge_weight(edge, objective)
-                edge_cost = edge["cost_usd"]
-                edge_time = edge["time_h"]
-                new_accumulated_cost = cost_so_far[cur] + edge_cost
-                new_accumulated_time = time_so_far[cur] + edge_time
+            # ── Constraint early exit (Budget & Deadline) ──
+            new_accumulated_cost = cost_so_far[cur] + edge_cost
+            new_accumulated_time = time_so_far[cur] + edge_time
+            
+            if new_accumulated_cost > budget_limit:
+                continue
+            if deadline_h is not None and new_accumulated_time > deadline_h:
+                continue
 
             if new_w < dist[nb]:
                 dist[nb] = new_w

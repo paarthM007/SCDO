@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from collections import Counter
 from google.cloud import firestore
+from google.cloud.firestore import FieldFilter
 from scdo.db import get_db
 from scdo.config import GOOGLE_CLOUD_PROJECT, FIRESTORE_COLLECTION
 
@@ -16,7 +17,6 @@ def get_job_history(limit=50, status_filter=None, user_id=None):
     db = get_db()
     query = db.collection(FIRESTORE_COLLECTION)
 
-    from google.cloud.firestore import FieldFilter
     if user_id:
         query = query.where(filter=FieldFilter("user_id", "==", user_id))
         

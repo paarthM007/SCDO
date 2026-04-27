@@ -1,15 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'models.dart';
+import 'app_config.dart';
 
 class ApiService {
-  static const String baseUrl = "https://paarthm007-scdo-api.hf.space/api";
-  // static const String baseUrl = "http://localhost:7860/api";
+  static final String baseUrl = "${AppConfig.gatewayBaseUrl}/api";
+
+  /// Returns auth headers with Firebase JWT token for authenticated requests.
+  Future<Map<String, String>> _authHeaders() async {
+    String? token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    return {
+      if (token != null) "Authorization": "Bearer $token",
+      "Content-Type": "application/json",
+    };
+  }
 
   Future<void> dispatchShipment(String cargoType) async {
     final response = await http.post(
       Uri.parse('$baseUrl/dispatch'),
-      headers: {"Content-Type": "application/json"},
+      headers: await _authHeaders(),
       body: jsonEncode({
         "cargo_type": cargoType,
         "origin": "New Delhi", // Matches New Delhi in cities_data.py
@@ -24,7 +34,7 @@ class ApiService {
   Future<TickResponse> tickSimulation(double hoursToAdvance) async {
     final response = await http.post(
       Uri.parse('$baseUrl/tick'),
-      headers: {"Content-Type": "application/json"},
+      headers: await _authHeaders(),
       body: jsonEncode({"hours_to_advance": hoursToAdvance}),
     );
     
@@ -38,7 +48,7 @@ class ApiService {
   Future<void> triggerOsintSync({bool demoMode = true}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/sync_osint?demo_mode=$demoMode'),
-      headers: {"Content-Type": "application/json"},
+      headers: await _authHeaders(),
     );
     if (response.statusCode != 200) {
       throw Exception('Failed to sync OSINT: ${response.body}');

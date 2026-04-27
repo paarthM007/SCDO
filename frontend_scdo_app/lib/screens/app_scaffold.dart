@@ -80,6 +80,7 @@ class _AppScaffoldState extends State<AppScaffold> {
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Community'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Live'),
         ],
       ),
     );

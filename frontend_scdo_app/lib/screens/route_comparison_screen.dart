@@ -1,24 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/path_visualizer.dart';
+import 'package:scdo_app/widgets/route_graph_painter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../app_config.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class RouteComparisonScreen extends StatefulWidget {
   final Map<String, dynamic>? routeData;
+  final String? productType;
 
-  const RouteComparisonScreen({super.key, this.routeData});
+  const RouteComparisonScreen({super.key, this.routeData, this.productType});
 
   @override
   State<RouteComparisonScreen> createState() => RouteComparisonScreenState();
 }
 
-class RouteComparisonScreenState extends State<RouteComparisonScreen> {
+class RouteComparisonScreenState extends State<RouteComparisonScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _data;
   String _selectedObjective = "balanced";
+  
+  // ── Animation & Simulation State ──
+  AnimationController? _animController;
+  Map<String, dynamic>? _selectedRouteData;
+  String? _animatingKey;
+  Map<String, bool> _simulatingPath = {};
+  String _result = "";
 
   @override
   void initState() {
     super.initState();
     _data = widget.routeData;
+  }
+
+  @override
+  void dispose() {
+    _animController?.dispose();
+    super.dispose();
   }
 
   void updateData(Map<String, dynamic> data) {
@@ -27,12 +47,65 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
     });
   }
 
-  @override
-  void didUpdateWidget(covariant RouteComparisonScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.routeData != oldWidget.routeData && widget.routeData != null) {
-      _data = widget.routeData;
+  // ── Simulation Logic (Adapted from AltRouteScreen) ──
+  Future<void> _simulatePath(String supplierName, String objective, Map<String, dynamic> routeData) async {
+    final key = "${supplierName}_$objective";
+    setState(() => _simulatingPath[key] = true);
+    try {
+      final pathEdges = routeData["path_edges"] as List? ?? [];
+      final waypoints = routeData["waypoints"] as List? ?? [];
+      
+      List<String> cities = waypoints.map<String>((wp) => wp["name"].toString()).toList();
+      final modeMap = {"HIGHWAY": "road", "SEA": "ship", "AIR": "air"};
+      List<String> modes = pathEdges.map<String>((e) => modeMap[e["mode"]] ?? "road").toList();
+
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      final response = await http.post(
+        Uri.parse("${AppConfig.gatewayBaseUrl}/api/simulate"),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "cities": cities,
+          "modes": modes,
+          "path_edges": pathEdges,
+          "product_type": widget.productType ?? "general",
+          "source": "multi_supplier_$key",
+        }),
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("✅ Simulation queued for $supplierName ($objective)")),
+        );
+      }
+    } catch (e) {
+      print("Simulation Error: $e");
+    } finally {
+      setState(() => _simulatingPath[key] = false);
     }
+  }
+
+  void _startPlayback(String key, Map<String, dynamic> pathData) {
+    setState(() {
+      _selectedRouteData = pathData;
+      _animatingKey = key;
+    });
+
+    _animController?.dispose();
+    final pathEdges = (pathData["path_edges"] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (pathEdges.isEmpty) return;
+
+    final totalTimeH = pathEdges.fold<double>(0.0, (sum, e) => sum + ((e['time_h'] as num?)?.toDouble() ?? 1.0));
+    final durationSec = (totalTimeH * 0.5).clamp(3.0, 20.0).round();
+
+    _animController = AnimationController(vsync: this, duration: Duration(seconds: durationSec));
+    _animController!.addListener(() => setState(() {}));
+    _animController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed) setState(() => _animatingKey = null);
+    });
+    _animController!.forward();
   }
 
   @override
@@ -51,57 +124,93 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
 
     return Padding(
       padding: const EdgeInsets.all(32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.purpleAccent.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.compare_arrows, color: Colors.purpleAccent, size: 28),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Text('Route Comparison', style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 4),
-                    Text('Comparing ${supplierRoutes.length} supplier route(s) to $buyer', style: Theme.of(context).textTheme.bodyMedium),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.purpleAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.compare_arrows, color: Colors.purpleAccent, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Route Comparison', style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: 4),
+                          Text('Comparing ${supplierRoutes.length} supplier route(s) to $buyer', style: Theme.of(context).textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
+                    _objectiveChip("fastest", Icons.speed, Colors.orangeAccent),
+                    const SizedBox(width: 8),
+                    _objectiveChip("cheapest", Icons.savings, GlassTheme.accentNeonGreen),
+                    const SizedBox(width: 8),
+                    _objectiveChip("balanced", Icons.balance, GlassTheme.accentCyan),
                   ],
                 ),
-              ),
-              _objectiveChip("fastest", Icons.speed, Colors.orangeAccent),
-              const SizedBox(width: 8),
-              _objectiveChip("cheapest", Icons.savings, GlassTheme.accentNeonGreen),
-              const SizedBox(width: 8),
-              _objectiveChip("balanced", Icons.balance, GlassTheme.accentCyan),
-            ],
+                const SizedBox(height: 24),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildComparisonHeader(),
+                        const SizedBox(height: 8),
+                        ...comparison.asMap().entries.map((entry) {
+                          return _buildComparisonRow(entry.key, entry.value, supplierRoutes);
+                        }),
+                        const SizedBox(height: 32),
+                        Text("Detailed Route Breakdown", style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 16),
+                        ...supplierRoutes.asMap().entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _buildDetailedCard(entry.key, entry.value),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(width: 32),
+          // ── Right Side Graph ──
           Expanded(
-            child: SingleChildScrollView(
+            flex: 1,
+            child: GlassContainer(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildComparisonHeader(),
-                  const SizedBox(height: 8),
-                  ...comparison.asMap().entries.map((entry) {
-                    return _buildComparisonRow(entry.key, entry.value, supplierRoutes);
-                  }),
-                  const SizedBox(height: 32),
-                  Text("Detailed Route Breakdown", style: Theme.of(context).textTheme.titleLarge),
+                  Text("Route Visualization", style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
-                  ...supplierRoutes.asMap().entries.map((entry) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _buildDetailedCard(entry.key, entry.value),
-                    );
-                  }),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+                      child: InteractiveRouteGraph(
+                        routeData: _selectedRouteData,
+                        shipmentProgress: _animatingKey != null ? _animController?.value ?? -1 : -1,
+                      ),
+                    ),
+                  ),
+                  if (_selectedRouteData != null) ...[
+                    const SizedBox(height: 16),
+                    Text("Selected: ${_selectedRouteData?['origin']} → ${_selectedRouteData?['destination']}", 
+                      style: TextStyle(color: GlassTheme.accentCyan, fontWeight: FontWeight.bold)),
+                  ],
                 ],
               ),
             ),
@@ -275,52 +384,50 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _variantMini("Fastest", Icons.speed, Colors.orangeAccent, routes["fastest"])),
+              Expanded(child: _variantMini(supplier, "Fastest", Icons.speed, Colors.orangeAccent, routes["fastest"])),
               const SizedBox(width: 12),
-              Expanded(child: _variantMini("Cheapest", Icons.savings, GlassTheme.accentNeonGreen, routes["cheapest"])),
+              Expanded(child: _variantMini(supplier, "Cheapest", Icons.savings, GlassTheme.accentNeonGreen, routes["cheapest"])),
               const SizedBox(width: 12),
-              Expanded(child: _variantMini("Balanced", Icons.balance, GlassTheme.accentCyan, routes["balanced"])),
+              Expanded(child: _variantMini(supplier, "Balanced", Icons.balance, GlassTheme.accentCyan, routes["balanced"])),
             ],
           ),
-          if (routes["balanced"] != null && routes["balanced"]["waypoints"] != null) ...[
+          if (routes["balanced"] != null && routes["balanced"]["path_edges"] != null) ...[
             const SizedBox(height: 16),
             const Divider(color: Colors.white10),
             const SizedBox(height: 8),
-            Text("Balanced Route Waypoints", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: (routes["balanced"]["waypoints"] as List).asMap().entries.map((e) {
-                final wp = e.value;
-                final isLast = e.key == (routes["balanced"]["waypoints"] as List).length - 1;
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: accentColor.withOpacity(0.2)),
-                      ),
-                      child: Text(wp["name"] ?? "", style: TextStyle(fontSize: 11, color: accentColor, fontWeight: FontWeight.w500)),
-                    ),
-                    if (!isLast) Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(Icons.chevron_right, size: 14, color: Colors.white24)),
-                  ],
-                );
-              }).toList(),
-            ),
+            Text("DETAILED PATHS", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            const SizedBox(height: 12),
+            _buildPathRow("FASTEST", routes["fastest"], Colors.orangeAccent),
+            const SizedBox(height: 12),
+            _buildPathRow("CHEAPEST", routes["cheapest"], GlassTheme.accentNeonGreen),
+            const SizedBox(height: 12),
+            _buildPathRow("BALANCED", routes["balanced"], GlassTheme.accentCyan),
           ],
         ],
       ),
     );
   }
 
-  Widget _variantMini(String label, IconData icon, Color color, Map<String, dynamic>? data) {
+  Widget _buildPathRow(String label, Map<String, dynamic>? data, Color color) {
+    if (data == null || data.containsKey("error")) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        PathVisualizer(pathEdges: data["path_edges"], accentColor: color),
+      ],
+    );
+  }
+
+  Widget _variantMini(String supplier, String label, IconData icon, Color color, Map<String, dynamic>? data) {
     final hasRoute = data != null && !data.containsKey("error");
+    final key = "${supplier}_${label.toLowerCase()}";
+    final isAnimating = _animatingKey == key;
+    final isSimulating = _simulatingPath[key] == true;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
@@ -338,10 +445,37 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
           ),
           const SizedBox(height: 10),
           if (hasRoute) ...[
-            _metricRow("Distance", "${data!['total_distance_km']} km"),
+            _metricRow("Dist", "${data!['total_distance_km']} km"),
             _metricRow("Time", "${data['total_time_readable']}"),
             _metricRow("Cost", "\$${data['total_cost_usd']}"),
-            _metricRow("Hops", "${data['num_hops']}"),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _startPlayback(key, data),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      child: Icon(isAnimating ? Icons.pause : Icons.play_arrow, size: 16, color: color),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: InkWell(
+                    onTap: isSimulating ? null : () => _simulatePath(supplier, label.toLowerCase(), data),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      child: isSimulating 
+                        ? SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: color))
+                        : Icon(Icons.science, size: 14, color: color),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ] else
             Text(data?["error"] ?? "No route", style: const TextStyle(color: GlassTheme.danger, fontSize: 11)),
         ],
