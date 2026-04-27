@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
 import 'package:scdo_app/widgets/route_graph_painter.dart';
+import 'package:scdo_app/widgets/path_visualizer.dart';
 import '../app_config.dart';
 
 class AltRouteScreen extends StatefulWidget {
@@ -22,10 +23,10 @@ class _AltRouteScreenState extends State<AltRouteScreen>
   final String baseUrl = AppConfig.gatewayBaseUrl;
   final String apiKey = AppConfig.gatewayApiKey;
 
-  final TextEditingController _altStart = TextEditingController(text: "Mumbai");
-  final TextEditingController _altEnd = TextEditingController(text: "London");
+  final TextEditingController _altStart = TextEditingController(text: "New Delhi");
+  final TextEditingController _altEnd = TextEditingController(text: "Mumbai");
   final TextEditingController _altBlocked =
-      TextEditingController(text: "Dubai, Istanbul");
+      TextEditingController(text: "");
 
   // ── v3.0 CTR Shipment Parameters ──────────────────────────
   final TextEditingController _budgetCtrl =
@@ -361,19 +362,13 @@ class _AltRouteScreenState extends State<AltRouteScreen>
             ),
           ]),
           const SizedBox(height: 12),
-          // ── v3.0: Display Path Waypoints ──
-          if (pathData["waypoints"] != null)
+          // ── v3.0: Display Detailed Path Breakdown ──
+          if (pathData["path_edges"] != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                (pathData["waypoints"] as List)
-                    .map((w) => w["name"])
-                    .join(" → "),
-                style: GoogleFonts.firaCode(
-                  fontSize: 11,
-                  color: accentColor.withOpacity(0.9),
-                  fontWeight: FontWeight.w500,
-                ),
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: PathVisualizer(
+                pathEdges: pathData["path_edges"],
+                accentColor: accentColor,
               ),
             ),
           Row(

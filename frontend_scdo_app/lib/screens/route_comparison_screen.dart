@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/path_visualizer.dart';
 
 class RouteComparisonScreen extends StatefulWidget {
   final Map<String, dynamic>? routeData;
@@ -282,38 +283,32 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> {
               Expanded(child: _variantMini("Balanced", Icons.balance, GlassTheme.accentCyan, routes["balanced"])),
             ],
           ),
-          if (routes["balanced"] != null && routes["balanced"]["waypoints"] != null) ...[
+          if (routes["balanced"] != null && routes["balanced"]["path_edges"] != null) ...[
             const SizedBox(height: 16),
             const Divider(color: Colors.white10),
             const SizedBox(height: 8),
-            Text("Balanced Route Waypoints", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: (routes["balanced"]["waypoints"] as List).asMap().entries.map((e) {
-                final wp = e.value;
-                final isLast = e.key == (routes["balanced"]["waypoints"] as List).length - 1;
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: accentColor.withOpacity(0.2)),
-                      ),
-                      child: Text(wp["name"] ?? "", style: TextStyle(fontSize: 11, color: accentColor, fontWeight: FontWeight.w500)),
-                    ),
-                    if (!isLast) Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: Icon(Icons.chevron_right, size: 14, color: Colors.white24)),
-                  ],
-                );
-              }).toList(),
-            ),
+            Text("DETAILED PATHS", style: TextStyle(color: GlassTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            const SizedBox(height: 12),
+            _buildPathRow("FASTEST", routes["fastest"], Colors.orangeAccent),
+            const SizedBox(height: 12),
+            _buildPathRow("CHEAPEST", routes["cheapest"], GlassTheme.accentNeonGreen),
+            const SizedBox(height: 12),
+            _buildPathRow("BALANCED", routes["balanced"], GlassTheme.accentCyan),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPathRow(String label, Map<String, dynamic>? data, Color color) {
+    if (data == null || data.containsKey("error")) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        PathVisualizer(pathEdges: data["path_edges"], accentColor: color),
+      ],
     );
   }
 

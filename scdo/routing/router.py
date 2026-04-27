@@ -216,8 +216,8 @@ def find_route(origin, destination, mode_pref="BEST",
         _, path_edges = dijkstra(
             graph, src_id, dst_id, allowed, objective, blocked_ids,
             product_type=product_type,
-            risk_score=risk_score, omega=omega, max_budget=max_budget,
-            deadline_h=deadline_h, cargo_type=cargo_type
+            risk_score=risk_score, omega=omega, max_budget=None,
+            deadline_h=None, cargo_type=cargo_type
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -316,10 +316,13 @@ def find_alternate_route(origin, destination, blocked_nodes,
                 if e["from"] != origin and e["from"] != destination:
                     nodes_to_avoid.add(e["from"])
         
-        # If we still have no variety (e.g. 1-hop paths), try blocking major hubs
-        if not any(n not in (origin, destination) for n in nodes_to_avoid):
-            # Attempt to force a multi-hop route by blocking common direct-connect hubs
-            for hub in ["Dubai", "Singapore", "Hong Kong", "Istanbul", "Mumbai"]:
+        # Identify if we are stuck with only 1-hop paths so far
+        is_stuck_with_1_hop = all(len(c.get("path_edges", [])) == 1 for c in candidates)
+        
+        # If we lack variety or are stuck with direct legs, force a multi-hop search
+        if len(candidates) < 2 or is_stuck_with_1_hop:
+            # Force block a pool of major hubs to see if a multi-hop route exists
+            for hub in ["Dubai", "Singapore", "Hong Kong", "Istanbul", "Mumbai", "London", "Doha"]:
                 if hub != origin and hub != destination:
                     nodes_to_avoid.add(hub)
 
