@@ -36,12 +36,12 @@ COST_PER_KM = {"HIGHWAY": 0.18, "SEA": 0.035, "AIR": 0.45}
 MODE_FIXED_COST = {"HIGHWAY": 25, "SEA": 350, "AIR": 150}
 
 OCEAN_ZONES = {
-    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia", "Egypt"],
+    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia", "Egypt", "Singapore", "Maharashtra", "Gujarat", "Tamil Nadu", "Kerala", "West Bengal", "Andhra Pradesh", "Goa", "Karnataka", "Odisha"],
     "Pacific Ocean": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Australia","New Zealand","USA","Canada","Mexico","Peru","Chile","Ecuador","Colombia","Panama"],
-    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland", "Panama"],
+    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland", "Panama"],
     "Mediterranean": ["Spain","France","Italy","Greece","Turkey","Lebanon","Israel","Egypt","Libya","Tunisia","Algeria","Morocco","Malta","Cyprus","Croatia","Slovenia"],
     "Baltic Sea": ["Germany","Poland","Russia","Sweden","Finland","Denmark","Estonia","Latvia","Lithuania"],
-    "Asia Pacific": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Myanmar","India","Sri Lanka","Bangladesh"],
+    "Asia Pacific": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Myanmar","India","Sri Lanka","Bangladesh", "Maharashtra", "Gujarat", "Tamil Nadu", "Kerala", "West Bengal", "Andhra Pradesh", "Goa", "Karnataka", "Odisha"],
 }
 
 COUNTRY_TO_OCEANS: Dict[str, List[str]] = {}

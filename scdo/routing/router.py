@@ -334,15 +334,16 @@ def find_alternate_route(origin, destination, blocked_nodes,
         candidates.append(r_alt2)
 
     # 4. Final Selection and Ranking
-    # Filter for uniqueness
+    # Filter for uniqueness (include mode in uniqueness key)
     unique_candidates = []
     seen_paths = set()
     for c in candidates:
         if "error" in c: continue
-        path_str = "->".join([e["to"] for e in c.get("path_edges", [])])
-        if path_str not in seen_paths:
+        # Path signature includes nodes AND modes
+        path_sig = "|".join([f"{e['to']}:{e['mode']}" for e in c.get("path_edges", [])])
+        if path_sig not in seen_paths:
             unique_candidates.append(c)
-            seen_paths.add(path_str)
+            seen_paths.add(path_sig)
 
     # If we still only have one, try one last time with a slightly different omega 
     # to see if that reveals a different edge preference in the CTR tensor
@@ -355,10 +356,10 @@ def find_alternate_route(origin, destination, blocked_nodes,
                 cargo_type=phase_2_cargo
             )
             if "error" not in r_last:
-                path_str = "->".join([e["to"] for e in r_last.get("path_edges", [])])
-                if path_str not in seen_paths:
+                path_sig = "|".join([f"{e['to']}:{e['mode']}" for e in r_last.get("path_edges", [])])
+                if path_sig not in seen_paths:
                     unique_candidates.append(r_last)
-                    seen_paths.add(path_str)
+                    seen_paths.add(path_sig)
                     if len(unique_candidates) >= 3: break
 
     # Map to result slots
