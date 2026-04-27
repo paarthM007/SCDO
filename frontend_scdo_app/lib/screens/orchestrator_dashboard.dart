@@ -367,6 +367,16 @@ class SchematicMapWidget extends StatelessWidget {
               _legendDot(Colors.white.withOpacity(0.4), 'Idle'),
             ]),
           ),
+          // ── EMERGENCY REROUTE LINE (CRISIS LINE) ──
+          if (shipmentState?.hasRerouted == true)
+            CustomPaint(
+              size: Size(w, h),
+              painter: DiversionLinePainter(
+                startPos: _nodes['JNPT']!,
+                endPos: _nodes['Mundra']!,
+                finalPos: _nodes['Dubai']!,
+              ),
+            ),
           // ── TRUCK ANIMATION ──
           Builder(
             builder: (context) {
@@ -761,4 +771,47 @@ class AuditTrailWidget extends StatelessWidget {
   }
 
   Widget _dot(Color c) => Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: c));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DiversionLinePainter — Draws the bright red "Crisis Line" for the demo.
+// ═══════════════════════════════════════════════════════════════════
+class DiversionLinePainter extends CustomPainter {
+  final Offset startPos;
+  final Offset endPos;
+  final Offset finalPos;
+
+  DiversionLinePainter({required this.startPos, required this.endPos, required this.finalPos});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.redAccent
+      ..strokeWidth = 3.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    // Draw glow effect for the emergency line
+    final glowPaint = Paint()
+      ..color = Colors.redAccent.withOpacity(0.3)
+      ..strokeWidth = 8.0
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+    // Convert relative offsets (0.0 - 1.0) to actual pixels
+    final p1 = Offset(startPos.dx * size.width, startPos.dy * size.height);
+    final p2 = Offset(endPos.dx * size.width, endPos.dy * size.height);
+    final p3 = Offset(finalPos.dx * size.width, finalPos.dy * size.height);
+
+    // Draw JNPT -> Mundra
+    canvas.drawLine(p1, p2, glowPaint);
+    canvas.drawLine(p1, p2, paint);
+    
+    // Draw Mundra -> Dubai
+    canvas.drawLine(p2, p3, glowPaint);
+    canvas.drawLine(p2, p3, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
