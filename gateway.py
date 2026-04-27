@@ -38,7 +38,7 @@ RATE_LIMIT_WINDOW = 60 # seconds
 RATE_LIMIT_MAX = 5 # requests per window
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # --- Global State Setup for Live Orchestrator ---
 crisis_manager = CrisisManager()
@@ -500,7 +500,10 @@ def api_multi_supplier_routes():
 @app.route("/api/cities", methods=["GET"])
 def api_cities():
     q = request.args.get("q", "")
-    return jsonify({"cities": list_cities(q)})
+    logger.info(f"City search request: q='{q}'")
+    results = list_cities(q)
+    logger.info(f"City search returned {len(results)} matches")
+    return jsonify({"cities": results})
 
 @app.route("/dispatch", methods=["POST"])
 @app.route("/api/dispatch", methods=["POST"])

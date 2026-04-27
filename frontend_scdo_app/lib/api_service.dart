@@ -59,7 +59,7 @@ class ApiService {
     if (query.isEmpty) return [];
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/cities?q=$query'),
+        Uri.parse('$baseUrl/cities?q=${Uri.encodeQueryComponent(query)}'),
         headers: await _authHeaders(),
       );
       if (response.statusCode == 200) {
