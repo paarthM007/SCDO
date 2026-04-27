@@ -27,7 +27,7 @@ AIR_OVERHEAD_H = 2.0
 
 MAX_HIGHWAY_KM = 300
 MAX_CROSS_BORDER_KM = 120
-MAX_SEA_KM = 8000
+MAX_SEA_KM = 10000
 MAX_AIR_KM = 12000
 
 # Realistic freight cost per km (USD) for commercial cargo
@@ -36,9 +36,9 @@ COST_PER_KM = {"HIGHWAY": 0.18, "SEA": 0.035, "AIR": 0.45}
 MODE_FIXED_COST = {"HIGHWAY": 25, "SEA": 350, "AIR": 150}
 
 OCEAN_ZONES = {
-    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia"],
+    "Indian Ocean": ["India","Sri Lanka","Bangladesh","Myanmar","Pakistan","Oman","Yemen","Saudi Arabia","UAE","Bahrain","Qatar","Kuwait","Iran","Iraq","Kenya","Tanzania","Mozambique","South Africa","Mauritius","Djibouti","Somalia","Australia", "Egypt"],
     "Pacific Ocean": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Australia","New Zealand","USA","Canada","Mexico","Peru","Chile","Ecuador","Colombia","Panama"],
-    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland"],
+    "Atlantic Ocean": ["USA","Canada","Mexico","Brazil","Argentina","Chile","Colombia","Venezuela","Uruguay","Nigeria","Ghana","Senegal","Cameroon","Angola","South South Africa","Morocco","Algeria","Tunisia","Libya","France","Spain","Portugal","UK","Netherlands","Belgium","Germany","Denmark","Norway","Sweden","Ireland", "Panama"],
     "Mediterranean": ["Spain","France","Italy","Greece","Turkey","Lebanon","Israel","Egypt","Libya","Tunisia","Algeria","Morocco","Malta","Cyprus","Croatia","Slovenia"],
     "Baltic Sea": ["Germany","Poland","Russia","Sweden","Finland","Denmark","Estonia","Latvia","Lithuania"],
     "Asia Pacific": ["China","Japan","South Korea","Taiwan","Philippines","Indonesia","Malaysia","Singapore","Vietnam","Thailand","Cambodia","Myanmar","India","Sri Lanka","Bangladesh"],
