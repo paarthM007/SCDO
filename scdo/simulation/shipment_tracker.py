@@ -261,27 +261,30 @@ class ShipmentOrchestrator:
         if not shipment or shipment.status == 'DELIVERED':
             return
             
-        target_node = "JNPT"
-        # Extract node risk from the combined_risk output structure
+        # Extract JNPT specific risk score for the presentation trigger
         city_details = risk_data.get("sentiment_risk", {}).get("city_details", {})
-        node_risk = city_details.get(target_node, {})
-        
-        # Pull the R_final score from the combined_risk.py output
+        node_risk = city_details.get("JNPT", {})
         r_final = risk_data.get("combined_risk_score", 0.1)
-        primary_hazard = node_risk.get("primary_hazard", "Anomaly Detected")
 
         # The Kill-Switch Trigger (Threshold > 0.85)
         if r_final >= 0.85:
-            print(f"\n[CRISIS] {target_node} breached R_final threshold ({r_final}).")
-            print(f"[REROUTE] Engaging active dynamic pathfinding away from: {primary_hazard}")
+            print(f"\n[REROUTE] Intercepting truck at JNPT. Diverting directly to Mundra.")
             
-            # THE SPLICE: Replace remaining steps with the crisis path
-            # We keep the steps already completed and append the alternate route
-            # In a real scenario, we would call find_route here, but for the demo 
-            # we use the hardcoded DEMO_CRISIS_PATH.
-            shipment.route_plan = shipment.route_plan[:shipment.current_step_index] + DEMO_CRISIS_PATH
+            # 1. Identify where the truck currently is
+            current_idx = shipment.current_step_index
             
-            # UI Flags to trigger Flutter animations
+            # 2. The Diversion Path (JNPT -> Mundra -> Dubai)
+            dynamic_diversion = [
+                LinkStep(from_node="JNPT", to_node="Mundra", mode="TRUCK", time_h=8.0, cost_usd=900),
+                NodeStep(name="Mundra", dwell_h=8.0),
+                LinkStep(from_node="Mundra", to_node="Dubai", mode="SEA", time_h=55.0, cost_usd=3800),
+                NodeStep(name="Dubai", dwell_h=0)
+            ]
+            
+            # 3. The Location-Aware Splice
+            shipment.route_plan = shipment.route_plan[:current_idx] + dynamic_diversion
+            
+            # 4. UI Flags to trigger Flutter animations
             shipment.has_rerouted = True
-            shipment.reroute_reason = primary_hazard
-            shipment.decision_logs.append(f"CRITICAL REROUTE: {primary_hazard} at {target_node}. Diverting to Mundra port.")
+            shipment.reroute_reason = node_risk.get("primary_hazard", "Simulated Catastrophic Port Congestion")
+            shipment.decision_logs.append(f"CRITICAL REROUTE: {shipment.reroute_reason} at JNPT. Diverting to Mundra port.")
