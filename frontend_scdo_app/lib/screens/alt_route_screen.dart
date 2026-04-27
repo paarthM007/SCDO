@@ -9,6 +9,7 @@ import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
 import 'package:scdo_app/widgets/route_graph_painter.dart';
 import 'package:scdo_app/widgets/path_visualizer.dart';
+import 'package:scdo_app/widgets/city_autocomplete.dart';
 import '../app_config.dart';
 
 class AltRouteScreen extends StatefulWidget {
@@ -526,20 +527,16 @@ class _AltRouteScreenState extends State<AltRouteScreen>
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 24),
-                        TextField(
+                        CityAutocomplete(
                           controller: _altStart,
-                          decoration: const InputDecoration(
-                            labelText: "Start City",
-                            prefixIcon: Icon(Icons.flight_takeoff),
-                          ),
+                          label: "Start City",
+                          prefixIcon: Icons.flight_takeoff,
                         ),
                         const SizedBox(height: 16),
-                        TextField(
+                        CityAutocomplete(
                           controller: _altEnd,
-                          decoration: const InputDecoration(
-                            labelText: "End City",
-                            prefixIcon: Icon(Icons.flight_land),
-                          ),
+                          label: "End City",
+                          prefixIcon: Icons.flight_land,
                         ),
                         const SizedBox(height: 16),
                         TextField(

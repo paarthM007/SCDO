@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/city_autocomplete.dart';
 import '../app_config.dart';
 
 class SupplyRoutesScreen extends StatefulWidget {
@@ -176,7 +177,11 @@ class _SupplyRoutesScreenState extends State<SupplyRoutesScreen>
               Text("BUYER (Destination)", style: TextStyle(color: GlassTheme.accentNeonGreen, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
             ]),
             const SizedBox(height: 16),
-            TextField(controller: _buyerController, decoration: const InputDecoration(labelText: "Buyer City", prefixIcon: Icon(Icons.location_city, color: GlassTheme.accentNeonGreen), hintText: "e.g. London, New York, Tokyo")),
+            CityAutocomplete(
+              controller: _buyerController,
+              label: "Buyer City",
+              prefixIcon: Icons.location_city,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _blockedController,
@@ -215,7 +220,13 @@ class _SupplyRoutesScreenState extends State<SupplyRoutesScreen>
                   Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: GlassTheme.accentCyan.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
                     child: Text("${idx + 1}", style: TextStyle(color: GlassTheme.accentCyan, fontWeight: FontWeight.bold, fontSize: 13))),
                   const SizedBox(width: 12),
-                  Expanded(child: TextField(controller: controller, decoration: InputDecoration(labelText: "Supplier ${idx + 1}", prefixIcon: const Icon(Icons.local_shipping, color: GlassTheme.accentCyan), hintText: "e.g. Mumbai, Shanghai"))),
+                  Expanded(
+                    child: CityAutocomplete(
+                      controller: controller,
+                      label: "Supplier ${idx + 1}",
+                      prefixIcon: Icons.local_shipping,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   if (_supplierControllers.length > 1)
                     IconButton(icon: const Icon(Icons.remove_circle_outline, color: GlassTheme.danger, size: 22), onPressed: () => _removeSupplier(idx)),

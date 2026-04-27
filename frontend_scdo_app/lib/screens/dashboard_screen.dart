@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
+import 'package:scdo_app/widgets/city_autocomplete.dart';
 import '../app_config.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -186,16 +187,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(isFirst ? Icons.my_location : isLast ? Icons.location_on : Icons.circle, 
-                           color: isFirst ? GlassTheme.accentNeonGreen : isLast ? GlassTheme.accentCyan : Colors.white54, size: 20),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: TextField(
+                        child: CityAutocomplete(
                           controller: _cityControllers[index],
-                          decoration: InputDecoration(
-                            labelText: isFirst ? "Origin City" : isLast ? "Destination City" : "Waypoint ${index}",
-                            hintText: "City name",
-                          ),
+                          label: isFirst ? "Origin City" : isLast ? "Destination City" : "Waypoint ${index}",
+                          prefixIcon: isFirst ? Icons.my_location : isLast ? Icons.location_on : Icons.circle,
                         ),
                       ),
                       if (!isFirst && !isLast)

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:scdo_app/theme/glass_theme.dart';
 import 'package:scdo_app/widgets/glass_container.dart';
 import 'package:scdo_app/widgets/delivery_zone_selector.dart';
+import 'package:scdo_app/widgets/city_autocomplete.dart';
 // Inside your build method:
 
 class ProfileScreen extends StatefulWidget {
@@ -180,61 +181,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const SizedBox(height: 16),
-                    Autocomplete<String>(
-                      initialValue: TextEditingValue(text: _locationController.text),
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text == '') {
-                          return const Iterable<String>.empty();
-                        }
-                        return getAllCityNames().where((String option) {
-                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                        });
-                      },
-                      onSelected: (String selection) {
-                        _locationController.text = selection;
-                      },
-                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                        // Sync initial controller with internal autocomplete controller
-                        return TextField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: "Location Data (e.g., Warehouse City)",
-                            prefixIcon: Icon(Icons.location_city),
-                            hintText: "Search for a city...",
-                          ),
-                          onChanged: (val) {
-                            _locationController.text = val;
-                          },
-                        );
-                      },
-                      optionsViewBuilder: (context, onSelected, options) {
-                        return Align(
-                          alignment: Alignment.topLeft,
-                          child: Material(
-                            elevation: 4.0,
-                            color: Colors.transparent,
-                            child: GlassContainer(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxHeight: 200, maxWidth: 400),
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: options.length,
-                                  itemBuilder: (BuildContext context, int index) {
-                                    final String option = options.elementAt(index);
-                                    return ListTile(
-                                      title: Text(option, style: const TextStyle(color: Colors.white)),
-                                      onTap: () => onSelected(option),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                    CityAutocomplete(
+                      controller: _locationController,
+                      label: "Location Data (e.g., Warehouse City)",
+                      prefixIcon: Icons.location_city,
                     ),
                     const SizedBox(height: 16),
                     TextField(

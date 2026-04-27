@@ -54,4 +54,22 @@ class ApiService {
       throw Exception('Failed to sync OSINT: ${response.body}');
     }
   }
+
+  Future<List<String>> fetchCities(String query) async {
+    if (query.isEmpty) return [];
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/cities?q=$query'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List cities = decoded["cities"] ?? [];
+        return cities.map<String>((c) => c["name"] as String).toList();
+      }
+    } catch (e) {
+      print("Error fetching cities: $e");
+    }
+    return [];
+  }
 }
