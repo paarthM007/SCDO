@@ -22,7 +22,11 @@ from scdo.analytics import get_job_history, compute_analytics
 import uuid
 from scdo.simulation.crisis_manager import CrisisManager
 from scdo.simulation.telemetry_monitor import TelemetryMonitor
-from scdo.simulation.shipment_tracker import ShipmentOrchestrator, ActiveShipment, parse_route_to_plan, NodeStep, LinkStep
+from scdo.simulation.shipment_tracker import (
+    ShipmentOrchestrator, ActiveShipment, parse_route_to_plan, 
+    NodeStep, LinkStep, DEMO_HAPPY_PATH
+)
+from scdo.risk.sentiment_risk import compute_sentiment_risk
 from scdo.routing.cities_data import get_all_nodes
 
 
@@ -41,10 +45,23 @@ crisis_manager = CrisisManager()
 telemetry_monitor = TelemetryMonitor(crisis_manager)
 orchestrator = ShipmentOrchestrator(telemetry_monitor)
 
-# Pre-warm telemetry with mocked baselines
+# Pre-warm telemetry with mocked baselines for ALL nodes (generic defaults)
 all_nodes = get_all_nodes()
 mocked_baselines = {n["name"]: {"mean": 2.0, "std_dev": 0.5} for n in all_nodes}
 telemetry_monitor.pre_warm_baselines(mocked_baselines)
+
+# Override demo-path nodes with realistic, tuned baselines
+# These higher means/std_devs prevent false 3-sigma alerts on the demo route
+_demo_overrides = {
+    "New Delhi": {"mean": 4.0, "std_dev": 1.0},
+    "JNPT":      {"mean": 12.0, "std_dev": 2.5},
+    "Mundra":    {"mean": 8.0, "std_dev": 1.5},
+    "Dubai":     {"mean": 18.0, "std_dev": 4.0},
+    "Mumbai":    {"mean": 14.0, "std_dev": 3.0},
+    "Felixstowe":{"mean": 12.0, "std_dev": 2.0},
+    "Singapore": {"mean": 15.0, "std_dev": 3.0},
+}
+telemetry_monitor.baselines.update(_demo_overrides)
 
 def _start_worker_thread():
     try:
@@ -139,7 +156,6 @@ def api_simulate():
             "path_edges": data.get("path_edges", []),
             "cargo_type": data.get("cargo_type", "general"),
             "n_iterations": n_iter,
-            # v3.0 CTR parameters
             "product_type": data.get("product_type"),
             "status": "pending",
             "created_at": datetime.now(timezone.utc),
@@ -513,16 +529,33 @@ def api_dispatch():
     if not path_edges:
         return _err("No path edges returned")
         
-    route_plan = parse_route_to_plan(path_edges)
+    if origin == "New Delhi" and destination == "Dubai":
+        # Presentation Override: Use the hardcoded bottleneck path
+        route_plan = DEMO_HAPPY_PATH
+        logger.info("[PRESENTATION] Using hardcoded DEMO_HAPPY_PATH for New Delhi -> Dubai")
+    else:
+        route_plan = parse_route_to_plan(path_edges)
 
     for step in route_plan:
         print(f"Step: {step.name if hasattr(step, 'name') else 'Link'}, Duration: {step.time_h} hours")
 
     shipment_id = str(uuid.uuid4())
-    shipment = ActiveShipment(shipment_id=shipment_id, cargo_type=cargo_type, route_plan=route_plan)
+    shipment = ActiveShipment(
+        shipment_id=shipment_id, 
+        cargo_type=cargo_type, 
+        route_plan=route_plan,
+        product_type=cargo_type, # Using cargo_type as product_type for now
+        max_budget=float('inf'),
+        deadline_h=float('inf'),
+        omega=0.5
+    )
     orchestrator.add_shipment(shipment)
     
     route_names = [step.name for step in route_plan if isinstance(step, NodeStep)]
+    
+    # Add initial reasoning log for the Thought Process terminal
+    initial_reasoning = f"REASONING: Optimized route generated for {cargo_type}. Path: {' → '.join(route_names)}. Anticipated arrival at {route_names[-1]} in {sum(s.time_h for s in route_plan):.1f}h."
+    shipment.decision_logs.append(initial_reasoning)
     
     return jsonify({
         "shipment_id": shipment_id,
@@ -534,7 +567,7 @@ def api_dispatch():
 @app.route("/api/tick", methods=["POST"])
 def api_tick():
     data = request.json or {}
-    hours_to_advance = float(data.get("hours_to_advance", 1.0))
+    hours_to_advance = float(data.get("hours_to_advance", 1.0)) * 2.0
     
     crises_before = set(crisis_manager.banned_nodes).union(set(crisis_manager.active_risk_multipliers.keys()))
     
@@ -569,13 +602,10 @@ def api_tick():
         
         if isinstance(current_step, NodeStep):
             curr_name = current_step.name
-            if (shipment.current_step_index + 1) < len(shipment.route_plan):
-                ns = shipment.route_plan[shipment.current_step_index + 1]
-                next_name = f"Transit to {ns.to_node}" if hasattr(ns, 'to_node') else getattr(ns, 'name', 'Unknown')
-            else:
-                next_name = "Final Destination"
+            next_name = curr_name # Stay at the node
         else:
-            curr_name = f"Transit to {current_step.to_node}"
+            # It's a LinkStep
+            curr_name = current_step.from_node
             next_name = current_step.to_node
 
         progress_pct = shipment.progress_on_step / current_step.time_h if current_step.time_h > 0 else 1.0
@@ -590,20 +620,38 @@ def api_tick():
             "next_step_name": next_name,
             "progress_percentage": round(progress_pct, 2),
             "route_plan": route_names,
-            "fresh_logs": fresh_logs
+            "fresh_logs": fresh_logs,
+            "has_rerouted": shipment.has_rerouted,
+            "reroute_reason": shipment.reroute_reason
         })
 
 
-    active_crises = list(crises_after)
-    
+    # Collect all nodes being monitored for this shipment's route 
+    active_route_nodes = set()
+    for shipment in orchestrator.active_shipments.values():
+        for step in shipment.route_plan:
+            # Using type name check as a safer alternative to isinstance across potential reloads
+            if type(step).__name__ == 'NodeStep':
+                active_route_nodes.add(step.name)
+
     telemetry_charts = {}
-    for node in active_crises:
+    active_crises = list(crises_after)
+    # Include all route nodes that have been visited or are currently monitored
+    # Only show nodes that are part of an active route, currently in crisis, 
+    # or part of the core demo scenario hubs. This keeps the Dwell Time Monitor 
+    # clean and focused for presentations.
+    nodes_to_chart = active_route_nodes | set(active_crises) | set(_demo_overrides.keys())
+    
+    for node in nodes_to_chart:
         if node in telemetry_monitor.baselines and node in telemetry_monitor.live_windows:
-            windows = telemetry_monitor.live_windows[node]
+            windows = list(telemetry_monitor.live_windows[node])
+            b_mean = telemetry_monitor.baselines[node]["mean"]
+            b_std = telemetry_monitor.baselines[node]["std_dev"]
             telemetry_charts[node] = {
-                "rolling_mean": sum(windows) / len(windows) if len(windows) > 0 else 0,
-                "threshold": telemetry_monitor.baselines[node]["mean"] + (3 * telemetry_monitor.baselines[node]["std_dev"]),
-                "history": list(windows)
+                "rolling_mean": round(sum(windows) / len(windows), 2) if len(windows) > 0 else 0.0,
+                "threshold": round(b_mean + (3 * b_std), 2),
+                "history": windows,
+                "is_crisis": node in active_crises
             }
 
     return jsonify({
@@ -612,6 +660,52 @@ def api_tick():
             "active_crises": active_crises,
             "telemetry_charts": telemetry_charts
         }
+    })
+
+@app.route('/api/sync_osint', methods=['POST'])
+def api_sync_osint():
+    """
+    Decoupled endpoint for OSINT. Fetches LIVE data, but guarantees a 
+    demonstrable crisis outcome if demo_mode is engaged.
+    """
+    demo_mode = request.args.get('demo_mode', default='false').lower() == 'true'
+    target_city = "JNPT" 
+    
+    logger.info(f"[OSINT] Initiating intelligence sweep (demo_mode={demo_mode})")
+    
+    # 1. Fetch REAL Live Intelligence
+    # We use sentiment as the base and wrap it in a mock combined structure for the orchestrator
+    sentiment_data = compute_sentiment_risk([target_city])
+    
+    # Structure it like combined_risk output
+    live_risk_data = {
+        "combined_risk_score": sentiment_data["sentiment_risk_score"],
+        "sentiment_risk": sentiment_data
+    }
+    
+    # --- THE DEMO GUARANTEE OVERRIDE ---
+    if demo_mode:
+        current_score = sentiment_data["city_details"].get(target_city, {}).get("risk_score", 0.1)
+        
+        if current_score < 0.85:
+            logger.info("[DEMO MODE] Injecting simulated crisis into live data...")
+            # Force the math to trigger the Kill-Switch in evaluate_and_reroute
+            live_risk_data["combined_risk_score"] = 0.95
+            
+            # Ensure there is a dramatic hazard text for the Flutter UI
+            node_details = sentiment_data["city_details"].get(target_city, {})
+            if node_details.get("primary_hazard") in ["None", None, "", "Analysis Failed", "Analysis Failed | Analysis Failed"]:
+                node_details["primary_hazard"] = "Simulated Catastrophic Port Congestion & Flash Flooding"
+    # -----------------------------------
+
+    # 2. Tell the orchestrator to evaluate moving trucks against this data
+    for shipment_id in list(orchestrator.active_shipments.keys()):
+        orchestrator.evaluate_and_reroute(shipment_id, live_risk_data)
+        
+    return jsonify({
+        "status": "INTELLIGENCE_SYNCED",
+        "demo_mode_active": demo_mode,
+        "results": live_risk_data
     })
 
 if __name__ == "__main__":

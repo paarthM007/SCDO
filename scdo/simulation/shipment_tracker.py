@@ -58,15 +58,48 @@ def parse_route_to_plan(path_edges: list) -> List[Union[NodeStep, LinkStep]]:
         
     return plan
 
+# ═══════════════════════════════════════════════════════════════════
+# PREDEFINED PRESENTATION SCENARIOS
+# ═══════════════════════════════════════════════════════════════════
+
+# The "Happy Path" — transit through the target bottleneck (JNPT)
+DEMO_HAPPY_PATH = [
+    NodeStep(name="New Delhi", dwell_h=0),
+    LinkStep(from_node="New Delhi", to_node="JNPT", mode="TRUCK", time_h=24.0, cost_usd=1200), 
+    NodeStep(name="JNPT", dwell_h=12.0),
+    LinkStep(from_node="JNPT", to_node="Dubai", mode="SEA", time_h=48.0, cost_usd=3500),
+    NodeStep(name="Dubai", dwell_h=0)
+]
+
+# The "Crisis Path" — the mid-flight diversion to an alternate port
+DEMO_CRISIS_PATH = [
+    # Spliced link from current position (e.g. en-route or Delhi) to alternate port
+    LinkStep(from_node="New Delhi", to_node="Mundra", mode="TRUCK", time_h=18.0, cost_usd=900),
+    NodeStep(name="Mundra", dwell_h=8.0), 
+    LinkStep(from_node="Mundra", to_node="Dubai", mode="SEA", time_h=55.0, cost_usd=3800),
+    NodeStep(name="Dubai", dwell_h=0)
+]
+
 class ActiveShipment:
-    def __init__(self, shipment_id: str, cargo_type: str, route_plan: List[Union[NodeStep, LinkStep]]):
+    def __init__(self, shipment_id: str, cargo_type: str, route_plan: List[Union[NodeStep, LinkStep]],
+                 product_type: str = "general",
+                 max_budget: float = float('inf'), deadline_h: float = float('inf'),
+                 omega: float = 0.5):
         self.shipment_id = shipment_id
         self.cargo_type = cargo_type
         self.route_plan = route_plan
+        self.product_type = product_type
+        self.max_budget = max_budget
+        self.deadline_h = deadline_h
+        self.omega = omega
+        
         self.current_step_index = 0
         self.progress_on_step = 0.0
         self.status = 'IN_TRANSIT'
         self.decision_logs = []
+        # UI/Presentation flags
+        self.has_rerouted = False
+        self.reroute_reason = None
 
     def get_divert_node(self) -> NodeStep:
         """
@@ -110,9 +143,7 @@ class ShipmentOrchestrator:
                 current_step = shipment.route_plan[shipment.current_step_index]
                 
                 # SAFETY NET: Prevent infinite loops if a step has 0 duration
-                step_duration = 10
-
-                #step_duration = max(0.001, current_step.time_h)
+                step_duration = max(0.1, current_step.time_h)
             
                 if shipment.progress_on_step >= step_duration:
                     
@@ -127,9 +158,23 @@ class ShipmentOrchestrator:
                     shipment.progress_on_step -= step_duration
                     shipment.current_step_index += 1
                     
+                    if shipment.current_step_index < len(shipment.route_plan):
+                        next_step = shipment.route_plan[shipment.current_step_index]
+                        if hasattr(next_step, 'name'):
+                            shipment.decision_logs.append(f"PROGRESS: Docked at {next_step.name} facility. Commencing customs clearance and cargo transfer. Expected dwell time: {next_step.time_h}h.")
+                        elif hasattr(next_step, 'to_node'):
+                            shipment.decision_logs.append(f"PROGRESS: Departed {next_step.from_node}. En route to {next_step.to_node} via {next_step.mode}. Transit time: {next_step.time_h}h. Segment Cost: ${next_step.cost_usd}.")
+                            
                     if shipment.current_step_index >= len(shipment.route_plan):
                         shipment.status = 'DELIVERED'
+                        shipment.decision_logs.append("SUCCESS: Shipment delivered successfully. Operations concluded.")
                         shipment.progress_on_step = 0.0
+                        break
+                        
+                    # DEMO FIX: If we just finished a LinkStep (actual transport), 
+                    # we break the loop so the UI can render the arrival at the next node.
+                    # This prevents the simulation from 'zipping' through multiple link+node pairs in one tick.
+                    if not isinstance(current_step, NodeStep):
                         break
                 else:
                     # The truck is still moving along the current step. 
@@ -167,7 +212,11 @@ class ShipmentOrchestrator:
                 new_route_response = find_route(
                     origin=divert_node.name,
                     destination=final_node.name,
-                    cargo_type=shipment.cargo_type
+                    cargo_type=shipment.cargo_type,
+                    product_type=shipment.product_type,
+                    omega=shipment.omega,
+                    max_budget=shipment.max_budget,
+                    deadline_h=shipment.deadline_h
                 )
                 
                 if "error" in new_route_response:
@@ -201,3 +250,38 @@ class ShipmentOrchestrator:
                         shipment.decision_logs.append(f"REROUTE SUCCESS: Splicing new route from {divert_node.name}.")
                         
                 shipment.status = 'IN_TRANSIT'
+
+    def evaluate_and_reroute(self, shipment_id: str, risk_data: dict):
+        """
+        Evaluates live risk data for the presentation use case.
+        If the Kill-Switch threshold is breached, dynamically splices
+        the Crisis path into the active shipment.
+        """
+        shipment = self.active_shipments.get(shipment_id)
+        if not shipment or shipment.status == 'DELIVERED':
+            return
+            
+        target_node = "JNPT"
+        # Extract node risk from the combined_risk output structure
+        city_details = risk_data.get("sentiment_risk", {}).get("city_details", {})
+        node_risk = city_details.get(target_node, {})
+        
+        # Pull the R_final score from the combined_risk.py output
+        r_final = risk_data.get("combined_risk_score", 0.1)
+        primary_hazard = node_risk.get("primary_hazard", "Anomaly Detected")
+
+        # The Kill-Switch Trigger (Threshold > 0.85)
+        if r_final >= 0.85:
+            print(f"\n[CRISIS] {target_node} breached R_final threshold ({r_final}).")
+            print(f"[REROUTE] Engaging active dynamic pathfinding away from: {primary_hazard}")
+            
+            # THE SPLICE: Replace remaining steps with the crisis path
+            # We keep the steps already completed and append the alternate route
+            # In a real scenario, we would call find_route here, but for the demo 
+            # we use the hardcoded DEMO_CRISIS_PATH.
+            shipment.route_plan = shipment.route_plan[:shipment.current_step_index] + DEMO_CRISIS_PATH
+            
+            # UI Flags to trigger Flutter animations
+            shipment.has_rerouted = True
+            shipment.reroute_reason = primary_hazard
+            shipment.decision_logs.append(f"CRITICAL REROUTE: {primary_hazard} at {target_node}. Diverting to Mundra port.")

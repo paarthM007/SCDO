@@ -81,6 +81,8 @@ def haversine(lat1, lon1, lat2, lon2) -> float:
 CARGO_PROFILES = {
     'PERISHABLE': {'time': 0.80, 'cost': 0.05, 'risk': 0.15},
     'HIGH_VALUE': {'time': 0.20, 'cost': 0.10, 'risk': 0.70},
+    'HAZMAT':     {'time': 0.30, 'cost': 0.20, 'risk': 0.50},
+    'ELECTRONICS':{'time': 0.50, 'cost': 0.20, 'risk': 0.30},
     'BULK':       {'time': 0.10, 'cost': 0.80, 'risk': 0.10},
     'STANDARD':   {'time': 0.33, 'cost': 0.33, 'risk': 0.34},
 }
@@ -133,12 +135,17 @@ def compute_edge_cost(mode: str, dist_km: float,
                       product_type: str, risk_score: float) -> float:
     """
     Holistic Cost Model C_total for a single edge.
-    C_total = F(mode, p) + (d · V_mode) · (1 + R · α)
+    C_total = F(mode, p) + (Q · d · V_mode) · (1 + R · α)
     """
     key = (mode, product_type)
     F = FIXED_OVERHEAD.get(key, FIXED_OVERHEAD.get((mode, "general"), 0.0))
     V = VARIABLE_RATE.get(mode, 0.0005)
-    variable = dist_km * V
+    
+    # For Orchestrator / Demo: quantity is normalized
+    # Bulk cargo uses a higher base quantity for realistic sea freight scaling
+    Q = 1000.0 if product_type == "bulk_commodity" else 100.0
+    
+    variable = Q * dist_km * V
     risk_factor = 1.0 + risk_score * ALPHA_COST_PENALTY
     return F + variable * risk_factor
 
@@ -152,7 +159,7 @@ def compute_edge_time(mode: str, dist_km: float,
     s = SPEED_CONSTANTS.get(mode, 65.0)
     transit = (dist_km / s) * (1.0 + risk_score * BETA_DELAY_COEFF)
     p_cfg = PROCESSING_TIME.get(mode, {"base_h": 1.0})
-    processing = p_cfg["base_h"]
+    processing = p_cfg.get("base_h", 0.0)
     return transit + processing
 
 
@@ -162,11 +169,6 @@ def compute_edge_weight(mode: str, dist_km: float,
     """
     CTR Objective Function W(e).
     W(e) = ω · Ĉ(e) + (1 - ω) · T̂(e)
-    Where Ĉ and T̂ are cost and time, combined via user preference ω.
-    
-    Note: In a full implementation, Ĉ and T̂ would be globally normalized.
-    Here we use a scaling approach: cost is divided by a reference factor
-    to bring it into comparable range with time (hours).
     """
     cost = compute_edge_cost(mode, dist_km, product_type, risk_score)
     time_h = compute_edge_time(mode, dist_km, risk_score)
@@ -315,7 +317,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     """
     Cargo-aware Dijkstra with CTR Tensor edge weighting.
     
-    When v3.0 parameters (product_type, omega) are provided,
+    When v3.0 parameters (quantity, product_type, omega) are provided,
     edge weights are computed dynamically using the CTR formulas.
     Otherwise, falls back to legacy static weights for backward compatibility.
     
@@ -332,8 +334,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
     if src_id in blocked: raise ValueError(f"Source '{src_id}' is in blocked list")
     if dst_id in blocked: raise ValueError(f"Destination '{dst_id}' is in blocked list")
 
-    # Determine if we're using v3.0 CTR mode
-    use_ctr = product_type is not None
+    # v3.0 CTR mode is now standard
     pt = product_type or DEFAULT_PRODUCT_TYPE
     R = risk_score
     budget_limit = max_budget if max_budget is not None else DEFAULT_MAX_BUDGET
@@ -365,7 +366,7 @@ def dijkstra(graph, src_id, dst_id, allowed_modes=None,
             mode = edge["mode"]
             d_km = edge["dist_km"]
 
-            if use_ctr:
+            if True: # CTR mode is standard
                 # ── v3.0 Cargo-aware pruning ──
                 if not is_cargo_compatible(mode, pt):
                     continue

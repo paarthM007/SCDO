@@ -26,6 +26,9 @@ class OrchestratorDashboard extends StatefulWidget {
   /// Callback when the simulation tick button is pressed.
   final void Function(double hours)? onTick;
 
+  /// Callback to trigger OSINT sync.
+  final VoidCallback? onSyncOsint;
+
   const OrchestratorDashboard({
     super.key,
     this.shipmentState,
@@ -33,6 +36,7 @@ class OrchestratorDashboard extends StatefulWidget {
     this.allLogs = const [],
     this.onDispatch,
     this.onTick,
+    this.onSyncOsint,
   });
 
   @override
@@ -82,8 +86,10 @@ class _OrchestratorDashboardState extends State<OrchestratorDashboard> {
         color: GlassTheme.backgroundCard,
         border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
       ),
-      child: Row(
-        children: [
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
           // Title
           Icon(Icons.radar, color: GlassTheme.accentCyan, size: 28),
           const SizedBox(width: 12),
@@ -105,7 +111,7 @@ class _OrchestratorDashboardState extends State<OrchestratorDashboard> {
               ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 24),
           // Cargo selector chips
           ...cargoOptions.entries.map((e) {
             final isSelected = _selectedCargo == e.key;
@@ -135,8 +141,22 @@ class _OrchestratorDashboardState extends State<OrchestratorDashboard> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
+          const SizedBox(width: 12),
+          // Sync OSINT button
+          OutlinedButton.icon(
+            onPressed: (widget.shipmentState != null && widget.onSyncOsint != null) ? widget.onSyncOsint : null,
+            icon: const Icon(Icons.sync, size: 18),
+            label: const Text('Sync OSINT', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: GlassTheme.accentCyan,
+              side: BorderSide(color: GlassTheme.accentCyan.withOpacity(0.5)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
         ],
       ),
+    ),
     );
   }
 
@@ -196,22 +216,51 @@ class SchematicMapWidget extends StatelessWidget {
   final ShipmentState? shipmentState;
   final List<String> activeCrises;
 
-  // Fixed node positions (fraction of container size)
+  // Node positions as fraction of container (x: left→right, y: top→bottom)
+  // Layout: Delhi (far left), inland cities cascade right, ports cluster middle-right, Dubai (far right)
   static const _nodes = {
-    'Factory':      Offset(0.10, 0.55),
-    'Inland Depot': Offset(0.35, 0.45),
-    'JNPT Port':    Offset(0.62, 0.60),
-    'Mundra Port':  Offset(0.72, 0.25),
-    'Dubai':        Offset(0.92, 0.40),
+    // Origin
+    'New Delhi':   Offset(0.08, 0.55),
+    // Inland northern corridor (STANDARD/BULK route)
+    'Jaipur':      Offset(0.22, 0.40),
+    'Rajsamand':   Offset(0.35, 0.28),
+    'Banaskantha': Offset(0.48, 0.22),
+    'Kandla':      Offset(0.62, 0.18),
+    // Inland western corridor
+    'Ahmedabad':   Offset(0.42, 0.42),
+    'Inland Depot':Offset(0.38, 0.55),
+    'Surat':       Offset(0.52, 0.58),
+    // Ports
+    'Mumbai':      Offset(0.62, 0.70),
+    'Mundra':      Offset(0.72, 0.30),
+    'JNPT':        Offset(0.62, 0.70), // Positioned at Mumbai's spot for the demo
+    // Destination
+    'Dubai':       Offset(0.92, 0.45),
   };
 
-  // Edges between nodes
   static const _edges = [
-    ['Factory', 'Inland Depot'],
-    ['Inland Depot', 'JNPT Port'],
-    ['Inland Depot', 'Mundra Port'],
-    ['JNPT Port', 'Dubai'],
-    ['Mundra Port', 'Dubai'],
+    // Northern inland corridor
+    ['New Delhi', 'Jaipur'],
+    ['Jaipur', 'Rajsamand'],
+    ['Rajsamand', 'Banaskantha'],
+    ['Banaskantha', 'Kandla'],
+    ['Kandla', 'Dubai'],
+    // Via Ahmedabad
+    ['New Delhi', 'Ahmedabad'],
+    ['Ahmedabad', 'Mumbai'],
+    ['Ahmedabad', 'Mundra'],
+    // Via Surat / Inland Depot
+    ['New Delhi', 'Inland Depot'],
+    ['Inland Depot', 'Surat'],
+    ['Surat', 'Mumbai'],
+    // Direct sea legs
+    ['Mumbai', 'Dubai'],
+    ['Mundra', 'Dubai'],
+    // Presentation direct legs
+    ['New Delhi', 'JNPT'],
+    ['JNPT', 'Dubai'],
+    // Direct air leg
+    ['New Delhi', 'Dubai'],
   ];
 
   const SchematicMapWidget({super.key, this.shipmentState, this.activeCrises = const []});
@@ -305,13 +354,6 @@ class SchematicMapWidget extends StatelessWidget {
               ]),
             );
           }),
-          // ── TRUCK ANIMATION ──
-          if (currentKey != null && nextKey != null)
-            _AnimatedTruck(
-              fromPos: Offset(_nodes[currentKey]!.dx * w, _nodes[currentKey]!.dy * h),
-              toPos: Offset(_nodes[nextKey]!.dx * w, _nodes[nextKey]!.dy * h),
-              progress: progress,
-            ),
           // Legend
           Positioned(
             bottom: 16, left: 16,
@@ -325,9 +367,54 @@ class SchematicMapWidget extends StatelessWidget {
               _legendDot(Colors.white.withOpacity(0.4), 'Idle'),
             ]),
           ),
+          // ── TRUCK ANIMATION ──
+          Builder(
+            builder: (context) {
+              final truckPos = _calculateTruckPosition(constraints);
+              return AnimatedPositioned(
+                duration: const Duration(milliseconds: 1000), // Matches your 1-sec tick!
+                curve: Curves.linear, // Linear keeps the speed constant
+                left: truckPos.dx - 16, // -16 centers the 32px icon
+                top: truckPos.dy - 16,
+                child: const Icon(Icons.local_shipping, color: Colors.greenAccent, size: 32),
+              );
+            }
+          ),
         ],
       );
     });
+  }
+
+  Offset _calculateTruckPosition(BoxConstraints constraints) {
+    final w = constraints.maxWidth;
+    final h = constraints.maxHeight;
+
+    // 1. Before dispatch: hide truck off-screen
+    if (shipmentState == null || shipmentState!.routePlan.isEmpty) {
+      return const Offset(-100, -100);
+    }
+
+    // 2. Lookup node keys
+    final currentKey = _findNodeKey(shipmentState!.currentStepName);
+    final nextKey = _findNodeKey(shipmentState!.nextStepName);
+
+    // 3. Fallback: park truck at the source node (New Delhi)
+    if (currentKey == null || nextKey == null) {
+      final srcOffset = _nodes['New Delhi']!;
+      return Offset(srcOffset.dx * w, srcOffset.dy * h);
+    }
+
+    final startOffset = _nodes[currentKey]!;
+    final endOffset = _nodes[nextKey]!;
+
+    // 4. Cap the percentage between 0.0 and 1.0
+    final double safePercentage = shipmentState!.progressPercentage.clamp(0.0, 1.0);
+
+    // 5. Lerp between the two nodes
+    final pos = Offset.lerp(startOffset, endOffset, safePercentage)!;
+
+    // 6. Convert relative → pixel coords
+    return Offset(pos.dx * w, pos.dy * h);
   }
 
   Widget _legendDot(Color c, String label) {
@@ -339,10 +426,10 @@ class SchematicMapWidget extends StatelessWidget {
   }
 
   IconData _nodeIcon(String name) {
-    if (name.contains('Factory')) return Icons.factory;
-    if (name.contains('Depot')) return Icons.warehouse;
-    if (name.contains('Port')) return Icons.directions_boat;
-    if (name.contains('Dubai')) return Icons.flag;
+    if (name == 'New Delhi') return Icons.home_work;
+    if (name == 'Dubai') return Icons.flag;
+    if (name == 'Mumbai' || name == 'Mundra' || name == 'Kandla') return Icons.directions_boat;
+    if (name == 'Inland Depot') return Icons.warehouse;
     return Icons.location_on;
   }
 
@@ -366,37 +453,6 @@ class SchematicMapWidget extends StatelessWidget {
   }
 }
 
-// ── Animated Truck Icon ──
-class _AnimatedTruck extends StatelessWidget {
-  final Offset fromPos;
-  final Offset toPos;
-  final double progress;
-
-  const _AnimatedTruck({required this.fromPos, required this.toPos, required this.progress});
-
-  @override
-  Widget build(BuildContext context) {
-    // Linearly interpolate position
-    final x = fromPos.dx + (toPos.dx - fromPos.dx) * progress.clamp(0.0, 1.0);
-    final y = fromPos.dy + (toPos.dy - fromPos.dy) * progress.clamp(0.0, 1.0);
-
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.easeInOut,
-      left: 100,
-      top: 100,
-      child: Container(
-        width: 32, height: 32,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: GlassTheme.accentNeonGreen.withOpacity(0.2),
-          boxShadow: [BoxShadow(color: GlassTheme.accentNeonGreen.withOpacity(0.5), blurRadius: 16, spreadRadius: 2)],
-        ),
-        child: const Icon(Icons.local_shipping, color: GlassTheme.accentNeonGreen, size: 18),
-      ),
-    );
-  }
-}
 
 // ── Grid Background Painter ──
 class _GridPainter extends CustomPainter {
@@ -443,109 +499,177 @@ class _EdgePainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════════
 // TelemetryChartWidget — fl_chart LineChart for dwell time monitoring.
 // ═══════════════════════════════════════════════════════════════════
-class TelemetryChartWidget extends StatelessWidget {
+class TelemetryChartWidget extends StatefulWidget {
   final GlobalState? globalState;
-
   const TelemetryChartWidget({super.key, this.globalState});
+  @override
+  State<TelemetryChartWidget> createState() => _TelemetryChartWidgetState();
+}
+
+class _TelemetryChartWidgetState extends State<TelemetryChartWidget> {
+  int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    // Use telemetry data if available, otherwise show dummy data
-    final hasTelemetry = globalState != null && globalState!.telemetryCharts.isNotEmpty;
-    final String chartTitle;
-    final double threshold;
-    final List<double> history;
+    final charts = widget.globalState?.telemetryCharts ?? {};
 
-    if (hasTelemetry) {
-      final firstEntry = globalState!.telemetryCharts.entries.first;
-      chartTitle = '${firstEntry.key} Dwell Time (Rolling Avg)';
-      threshold = firstEntry.value.threshold;
-      history = firstEntry.value.history;
-    } else {
-      chartTitle = 'JNPT Dwell Time (Rolling Avg)';
-      threshold = 3.5;
-      history = [1.8, 2.0, 2.1, 1.9, 2.3, 2.5, 2.8, 3.1, 3.8, 4.2];
+    // If no live data yet, show an animated "waiting" placeholder
+    if (charts.isEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.show_chart, color: GlassTheme.accentCyan, size: 18),
+          const SizedBox(width: 8),
+          Text('Dwell Time Monitor',
+            style: GoogleFonts.outfit(color: GlassTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 4),
+        Text('Awaiting first node arrival...', style: TextStyle(color: GlassTheme.textSecondary, fontSize: 10)),
+        const Spacer(),
+        Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.sensors, color: GlassTheme.accentCyan.withOpacity(0.3), size: 48),
+          const SizedBox(height: 8),
+          Text('No telemetry yet', style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 11)),
+        ])),
+        const Spacer(),
+      ]);
     }
 
+    // Clamp selection to valid index
+    final nodeNames = charts.keys.toList();
+    if (_selectedIndex >= nodeNames.length) _selectedIndex = 0;
+    final selectedNode = nodeNames[_selectedIndex];
+    final data = charts[selectedNode]!;
+    final isCrisis = data.isCrisis;
+    final chartColor = isCrisis ? GlassTheme.danger : GlassTheme.accentCyan;
+    final history = data.history;
+    final threshold = data.threshold;
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Header + node selector
       Row(children: [
-        Icon(Icons.show_chart, color: GlassTheme.accentCyan, size: 18),
+        Icon(Icons.show_chart, color: chartColor, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(chartTitle,
+        Expanded(child: Text('$selectedNode Dwell Time',
           style: GoogleFonts.outfit(color: GlassTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
           overflow: TextOverflow.ellipsis,
         )),
+        if (isCrisis)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: GlassTheme.danger.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+            child: Text('⚡ ANOMALY', style: TextStyle(color: GlassTheme.danger, fontSize: 9, fontWeight: FontWeight.bold)),
+          ),
       ]),
       const SizedBox(height: 4),
-      Text('Real-time anomaly detection', style: TextStyle(color: GlassTheme.textSecondary, fontSize: 10)),
-      const SizedBox(height: 12),
-      Expanded(
-        child: LineChart(
-          LineChartData(
-            minY: 0,
-            maxY: (history.isEmpty ? 5.0 : history.reduce(max) * 1.3).clamp(4.0, 20.0),
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) => FlLine(color: Colors.white.withOpacity(0.05), strokeWidth: 0.5),
-            ),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30,
-                getTitlesWidget: (v, _) => Text('${v.toStringAsFixed(0)}h',
-                  style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9)))),
-              bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            borderData: FlBorderData(show: false),
-            extraLinesData: ExtraLinesData(horizontalLines: [
-              HorizontalLine(
-                y: threshold,
-                color: GlassTheme.danger.withOpacity(0.7),
-                strokeWidth: 1.5,
-                dashArray: [6, 4],
-                label: HorizontalLineLabel(
-                  show: true,
-                  alignment: Alignment.topRight,
-                  style: TextStyle(color: GlassTheme.danger, fontSize: 9, fontWeight: FontWeight.bold),
-                  labelResolver: (_) => '+3σ Threshold',
+      // Node tab pills
+      if (nodeNames.length > 1)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: List.generate(nodeNames.length, (i) {
+            final isSelected = i == _selectedIndex;
+            final nodeIsCrisis = charts[nodeNames[i]]!.isCrisis;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedIndex = i),
+              child: Container(
+                margin: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isSelected ? chartColor.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: isSelected ? chartColor : Colors.white.withOpacity(0.1)),
                 ),
+                child: Text(nodeNames[i],
+                  style: TextStyle(
+                    color: nodeIsCrisis ? GlassTheme.danger : (isSelected ? chartColor : Colors.white.withOpacity(0.5)),
+                    fontSize: 9, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  )),
               ),
-            ]),
-            lineBarsData: [
-              LineChartBarData(
-                spots: List.generate(history.length, (i) => FlSpot(i.toDouble(), history[i])),
-                isCurved: true,
-                curveSmoothness: 0.3,
-                color: GlassTheme.accentCyan,
-                barWidth: 2.5,
-                isStrokeCapRound: true,
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, _, __, ___) {
-                    final isAbove = spot.y > threshold;
-                    return FlDotCirclePainter(
-                      radius: isAbove ? 4 : 2.5,
-                      color: isAbove ? GlassTheme.danger : GlassTheme.accentCyan,
-                      strokeWidth: 0,
-                    );
-                  },
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [GlassTheme.accentCyan.withOpacity(0.15), GlassTheme.accentCyan.withOpacity(0.0)],
+            );
+          })),
+        ),
+      const SizedBox(height: 8),
+      // Rolling mean indicator
+      Row(children: [
+        Text('Rolling Mean: ', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9)),
+        Text('${data.rollingMean.toStringAsFixed(1)}h',
+          style: TextStyle(color: chartColor, fontSize: 9, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 12),
+        Text('Threshold: ', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9)),
+        Text('${threshold.toStringAsFixed(1)}h',
+          style: TextStyle(color: GlassTheme.danger.withOpacity(0.7), fontSize: 9)),
+      ]),
+      const SizedBox(height: 8),
+      // The chart
+      Expanded(
+        child: history.isEmpty
+          ? Center(child: Text('Recording...', style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 10)))
+          : LineChart(
+            LineChartData(
+              minY: 0,
+              maxY: max(history.reduce(max) * 1.4, threshold * 1.2).clamp(0.0, 100.0),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                getDrawingHorizontalLine: (_) => FlLine(color: Colors.white.withOpacity(0.05), strokeWidth: 0.5),
+              ),
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30,
+                  getTitlesWidget: (v, _) => Text('${v.toStringAsFixed(0)}h',
+                    style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 9)))),
+                bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              borderData: FlBorderData(show: false),
+              extraLinesData: ExtraLinesData(horizontalLines: [
+                HorizontalLine(
+                  y: threshold,
+                  color: GlassTheme.danger.withOpacity(0.7),
+                  strokeWidth: 1.5,
+                  dashArray: [6, 4],
+                  label: HorizontalLineLabel(
+                    show: true,
+                    alignment: Alignment.topRight,
+                    style: TextStyle(color: GlassTheme.danger, fontSize: 9, fontWeight: FontWeight.bold),
+                    labelResolver: (_) => '+3σ',
                   ),
                 ),
-              ),
-            ],
+              ]),
+              lineBarsData: [
+                LineChartBarData(
+                  spots: List.generate(history.length, (i) => FlSpot(i.toDouble(), history[i])),
+                  isCurved: true,
+                  curveSmoothness: 0.3,
+                  color: chartColor,
+                  barWidth: 2.5,
+                  isStrokeCapRound: true,
+                  dotData: FlDotData(
+                    show: true,
+                    getDotPainter: (spot, _, __, ___) {
+                      final isAbove = spot.y > threshold;
+                      return FlDotCirclePainter(
+                        radius: isAbove ? 5 : 3,
+                        color: isAbove ? GlassTheme.danger : chartColor,
+                        strokeWidth: 0,
+                      );
+                    },
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                      colors: [chartColor.withOpacity(0.4), chartColor.withOpacity(0.0)],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
       ),
     ]);
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════════════
 // AuditTrailWidget — Terminal-style "Thought Process" log viewer.
@@ -615,10 +739,9 @@ class AuditTrailWidget extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   itemCount: logs.length,
                   itemBuilder: (context, index) {
-                    // Show logs newest-first
-                    final log = logs[logs.length - 1 - index];
-                    final isAlert = log.contains('ALERT') || log.contains('CRISIS') || log.contains('FAILED');
-                    final isSuccess = log.contains('SUCCESS') || log.contains('DISPATCHED');
+                    final log = logs[index];
+                    final isAlert = log.contains('ALERT') || log.contains('CRISIS') || log.contains('FAILED') || log.contains('CRITICAL') || log.contains('TELEMETRY');
+                    final isSuccess = log.contains('SUCCESS') || log.contains('DISPATCHED') || log.contains('REASONING');
                     Color logColor = GlassTheme.accentNeonGreen.withOpacity(0.7);
                     if (isAlert) logColor = GlassTheme.danger.withOpacity(0.9);
                     else if (isSuccess) logColor = GlassTheme.accentCyan;

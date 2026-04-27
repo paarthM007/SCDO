@@ -374,7 +374,8 @@ class SCDOHome extends StatefulWidget {
 class _SCDOHomeState extends State<SCDOHome> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   
-  final String baseUrl = "http://localhost:7860";
+  final String baseUrl = "https://paarthm007-scdo-api.hf.space";
+  // final String baseUrl = "http://localhost:7860";
   final String apiKey = "scdo-dev-key-change-me";
 
   String rawJsonResponse = "Output will appear here...";

@@ -1,10 +1,7 @@
 import requests
-from typing import List
-from scdo.config import NEWS_API_KEY
-
-import requests
 from datetime import datetime, timedelta
 from typing import List
+from scdo.config import NEWS_API_KEY
 
 class NewsClient:
     """
