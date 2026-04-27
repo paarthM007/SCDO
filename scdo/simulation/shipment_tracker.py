@@ -275,11 +275,20 @@ class ShipmentOrchestrator:
             print(f"\n[CRISIS] {target_node} breached R_final threshold ({r_final}).")
             print(f"[REROUTE] Engaging active dynamic pathfinding away from: {primary_hazard}")
             
-            # THE SPLICE: Replace remaining steps with the crisis path
-            # We keep the steps already completed and append the alternate route
-            # In a real scenario, we would call find_route here, but for the demo 
-            # we use the hardcoded DEMO_CRISIS_PATH.
-            shipment.route_plan = shipment.route_plan[:shipment.current_step_index] + DEMO_CRISIS_PATH
+            # THE SPLICE: Replace remaining steps with a dynamic diversion to Mundra
+            # We determine the last known node to avoid "teleporting" jumps in the UI.
+            last_node_name = "New Delhi"
+            for i in range(shipment.current_step_index + 1):
+                step = shipment.route_plan[i]
+                if isinstance(step, NodeStep):
+                    last_node_name = step.name
+            
+            # Construct a dynamic diversion leg from the current position to Mundra
+            # This ensures that if the shipment is at JNPT, it moves JNPT -> Mundra via road.
+            diversion_leg = LinkStep(from_node=last_node_name, to_node="Mundra", mode="TRUCK", time_h=15.0, cost_usd=800)
+            
+            # Replace current and future steps with [Divert Leg] + [Mundra Node, Mundra->Dubai, Dubai Node]
+            shipment.route_plan = shipment.route_plan[:shipment.current_step_index] + [diversion_leg] + DEMO_CRISIS_PATH[1:]
             
             # UI Flags to trigger Flutter animations
             shipment.has_rerouted = True
