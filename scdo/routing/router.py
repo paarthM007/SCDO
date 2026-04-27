@@ -286,12 +286,28 @@ def find_alternate_route(origin, destination, blocked_nodes,
     if "error" not in r_primary:
         candidates.append(r_primary)
 
-    # 2. Find Alternative 1 (Block a node from primary)
-    r_alt1 = {"error": "No alternative found"}
+    # 2. Find Alternative 1 (Try a different primary mode for diversity)
+    r_alt1 = {"error": "No mode-switched alternative found"}
     if candidates:
+        primary_modes = candidates[0].get("modes_used", [])
+        alt_mode = "BEST"
+        if "AIR" in primary_modes:
+            alt_mode = "SEA" # Force a sea/land route if primary was Air
+        elif "SEA" in primary_modes:
+            alt_mode = "AIR" # Force an air route if primary was Sea
+            
+        if alt_mode != "BEST":
+            r_alt1 = find_route(
+                origin, destination, alt_mode, "BALANCED", blocked_nodes,
+                product_type=effective_product,
+                risk_score=0.0, omega=eff_omega, max_budget=budget, deadline_h=deadline_h,
+                cargo_type=phase_2_cargo
+            )
+            
+    # Fallback to node-blocking if mode-switch failed or was not applicable
+    if "error" in r_alt1 and candidates:
         edges = candidates[0].get("path_edges", [])
         if len(edges) > 1:
-            # Block the middle node
             mid_node = edges[len(edges)//2]["from"]
             if mid_node != origin:
                 temp_blocked = list(blocked_nodes or []) + [mid_node]
@@ -301,10 +317,11 @@ def find_alternate_route(origin, destination, blocked_nodes,
                     risk_score=0.0, omega=eff_omega, max_budget=budget, deadline_h=deadline_h,
                     cargo_type=phase_2_cargo
                 )
+    
     if "error" not in r_alt1:
         candidates.append(r_alt1)
 
-    # 3. Find Alternative 2 (Block a different node)
+    # 3. Find Alternative 2 (Block nodes from all current candidates)
     r_alt2 = {"error": "No secondary alternative found"}
     if candidates:
         all_nodes_to_avoid = set(blocked_nodes or [])
