@@ -200,7 +200,9 @@ class _AltRouteScreenState extends State<AltRouteScreen>
       _showGraph = true;
     });
 
+    _animController?.stop();
     _animController?.dispose();
+    _animController = null;
 
     // Calculate total time to derive proportional segment weights
     final totalTimeH = pathEdges.fold<double>(
@@ -214,14 +216,18 @@ class _AltRouteScreenState extends State<AltRouteScreen>
       duration: Duration(seconds: durationSec),
     );
 
-    setState(() {
-      _animatingKey = key;
-    });
+    if (mounted) {
+      setState(() {
+        _animatingKey = key;
+      });
+    }
 
     // Listen to rebuild graph with progress
-    _animController!.addListener(() => setState(() {}));
+    _animController!.addListener(() {
+      if (mounted) setState(() {});
+    });
     _animController!.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
+      if (status == AnimationStatus.completed && mounted) {
         setState(() {
           _animatingKey = null;
         });

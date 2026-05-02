@@ -88,12 +88,22 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> with Ticke
   }
 
   void _startPlayback(String key, Map<String, dynamic> pathData) {
-    setState(() {
-      _selectedRouteData = pathData;
-      _animatingKey = key;
-    });
+    // If clicking the same route that's already playing, toggle it off.
+    if (_animatingKey == key) {
+      _animController?.stop();
+      _animController?.dispose();
+      _animController = null;
+      if (mounted) {
+        setState(() => _animatingKey = null);
+      }
+      return;
+    }
 
+    // Stop and dispose any existing animation before starting a new one.
+    _animController?.stop();
     _animController?.dispose();
+    _animController = null;
+
     final pathEdges = (pathData["path_edges"] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (pathEdges.isEmpty) return;
 
@@ -101,10 +111,28 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> with Ticke
     final durationSec = (totalTimeH * 0.5).clamp(3.0, 20.0).round();
 
     _animController = AnimationController(vsync: this, duration: Duration(seconds: durationSec));
-    _animController!.addListener(() => setState(() {}));
-    _animController!.addStatusListener((status) {
-      if (status == AnimationStatus.completed) setState(() => _animatingKey = null);
+    
+    if (mounted) {
+      setState(() {
+        _selectedRouteData = pathData;
+        _animatingKey = key;
+      });
+    }
+
+    _animController!.addListener(() {
+      if (mounted) setState(() {});
     });
+    
+    _animController!.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() {
+          _animatingKey = null;
+          // Don't dispose here yet if we want to keep the final state, 
+          // but usually it's cleaner to clean up if we aren't looping.
+        });
+      }
+    });
+    
     _animController!.forward();
   }
 
@@ -202,7 +230,7 @@ class RouteComparisonScreenState extends State<RouteComparisonScreen> with Ticke
                       decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
                       child: InteractiveRouteGraph(
                         routeData: _selectedRouteData,
-                        shipmentProgress: _animatingKey != null ? _animController?.value ?? -1 : -1,
+                        shipmentProgress: (_animatingKey != null && _animController != null) ? _animController!.value : -1,
                       ),
                     ),
                   ),
